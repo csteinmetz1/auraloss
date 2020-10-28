@@ -1,5 +1,5 @@
 # auraloss
-Collection of audio focused loss functions in PyTorch.
+A collection of audio focused loss functions in PyTorch.
 
 ## Setup
 
@@ -22,10 +22,28 @@ loss = sisdr(x, y)
 
 ```
 
-## Details
+# Loss functions
 
-All loss functions support multi-channel audio. 
+We categorize all loss functions as either time-domain or frequency domain approaches. 
 
-## Cite
+## Time-domain
+
+- Error-to-signal ratio (ESR)
+- DC error 
+- Logcosh
+- SI-SDR
+
+## Frequency-domain
+
+- Spectral Convergence 
+- Log STFT Magnitude
+- Aggregate STFT 
+- Multi-Resolution STFT 
+- Sum and difference (stereo)
+
+
+
+# Cite
+If you use this code in your work please consider citing us.
 ```
 ```
