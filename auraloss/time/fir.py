@@ -2,29 +2,34 @@ import torch
 import numpy as np
 import scipy.signal
 
-import matplotlib.pyplot as plt
+from ..utils.plotting import compare_filters
 
 class FIRFilter(torch.nn.Module):
     """FIR pre-emphasis filtering module.
 
     Args:
         filter_type (str): Shape of the desired FIR filter ("hp", "fd", "aw"). Default: "hp"
-        coef (float): Coefficient value for the filter tap.
+        coef (float): Coefficient value for the filter tap (only applicable for "hp" and "fd"). Default: 0.85
+        ntaps (int): Number of FIR filter taps for constructing A-weighting filters. Default: 101
+        plot (bool): Plot the magnitude respond of the filter. Default: False
 
     Based upon the perceptual loss pre-empahsis filters proposed by
     [Wright and Välimäki, 2019](https://arxiv.org/abs/1911.08922). 
 
     A-weighting filter - "aw"
-    Folded differentiator - "fd"
     First-order highpass - "hp"
+    Folded differentiator - "fd"
 
     Note that the default coefficeint value of 0.85 is optimized for 
     a sampling rate of 44.1 kHz, considering adjusting this value at differnt sampling rates.
     """
 
-    def __init__(self, filter_type="hp", coef=0.85, fs=44100):
+    def __init__(self, filter_type="hp", coef=0.85, fs=44100, ntaps=101, plot=False):
         """Initilize FIR pre-emphasis filtering module."""
         super(FIRFilter, self).__init__()
+
+        if ntaps % 2 == 0:
+            raise ValueError(f"ntaps must be odd (ntaps={ntaps}).")
 
         if filter_type == "hp":
             self.fir = torch.nn.Conv1d(1, 1, kernel_size=3, bias=False, padding=1)
@@ -35,44 +40,34 @@ class FIRFilter(torch.nn.Module):
             self.fir.weight.requires_grad = False
             self.fir.weight.data = torch.tensor([1, 0, -coef]).view(1,1,-1)
         elif filter_type == "aw":
-            self.fir = torch.nn.Conv1d(1, 1, kernel_size=101, bias=False, padding=101//2)
-            self.fir.weight.requires_grad = False
+            # Definition of analog A-weighting filter according to IEC/CD 1672.
+            f1 = 20.598997
+            f2 = 107.65265
+            f3 = 737.86223
+            f4 = 12194.217
+            A1000 = 1.9997
 
-            # first we define transfer function with poles
-            z = [0,0]
-            p = [-2*np.pi*20.598997057568145,
-                 -2*np.pi*20.598997057568145,
-                 -2*np.pi*12194.21714799801,
-                 -2*np.pi*12194.21714799801]
-            k = 1
+            NUMs = [(2*np.pi * f4)**2 * (10**(A1000/20)), 0, 0, 0, 0]
+            DENs = np.polymul([1, 4*np.pi * f4, (2*np.pi * f4)**2],
+                              [1, 4*np.pi * f1, (2*np.pi * f1)**2])
+            DENs = np.polymul(np.polymul(DENs, [1, 2*np.pi * f3]),
+                                               [1, 2*np.pi * f2])
 
-            # normalize to 0dB at 1 kHz
-            b, a = scipy.signal.zpk2tf(z, p, k)
-            k /= abs(scipy.signal.freqs(b, a, [2*np.pi*1000])[1][0])
+            # convert analog filter to digital filter 
+            b, a = scipy.signal.bilinear(NUMs, DENs, fs=fs)
 
-            # compute the analog frequency response
-            w, h = scipy.signal.freqs_zpk(z, p, k, worN=1024)
-            #w, _ = scipy.signal.freqz_zpk(z, p, k, fs=fs)
-
-            # only take values within Nyquist
-            w = w[np.where(w < fs//2)[0]]
-            h = h[:len(w)]
+            # compute the digital filter frequency response
+            w_iir, h_iir = scipy.signal.freqz(b, a, worN=512, fs=fs)
 
             # then we fit to 101 tap FIR filter with least squares
-            taps = scipy.signal.firls(101, w, abs(h), fs=fs)
-            print(taps)
+            taps = scipy.signal.firls(ntaps, w_iir, abs(h_iir), fs=fs)
+
+            # now implement this digital FIR filter as a Conv1d layer
+            self.fir = torch.nn.Conv1d(1, 1, kernel_size=ntaps, bias=False, padding=ntaps//2)
+            self.fir.weight.requires_grad = False
             self.fir.weight.data = torch.tensor(taps.astype('float32')).view(1,1,-1)
 
-            # double check our filter
-            w, h = scipy.signal.freqz(taps, fs=fs) 
-
-            h_db = 20 * np.log10(abs(h))
-            plt.plot(w, h_db)
-            plt.xscale('log')
-            plt.ylim([-50, 10])
-            plt.xlim([10, 22.05e3])
-            plt.grid()
-            plt.show()
+            if plot: compare_filters(b, a, taps, fs=fs)
 
     def forward(self, input, target):
         """Calculate forward propagation.
@@ -89,14 +84,3 @@ class FIRFilter(torch.nn.Module):
             target[:,i:i+1,:] = self.fir(target[:,i:i+1,:])
 
         return input, target
-
-if __name__ == '__main__':
-
-    filt = FIRFilter("aw")
-
-    input = (torch.rand(8,2,16000) * 2) - 1
-    target = (torch.rand(8,2,16000) * 2) - 1
-
-    input, target = filt(input, target)
-
-    print(input.shape)
