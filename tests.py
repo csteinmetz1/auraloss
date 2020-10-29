@@ -1,5 +1,6 @@
 import torch
-from auraloss.time.fir import FIRFilter
+from auraloss.perceptual import FIRFilter
+from auraloss.time import LogCoshLoss
 
 filt = FIRFilter("aw", ntaps=101, plot=True)
 

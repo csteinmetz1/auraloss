@@ -15,13 +15,14 @@ def stft(x, fft_size, hop_size, win_length, window):
     real = x_stft[..., 0]
     imag = x_stft[..., 1]
 
-    # NOTE(kan-bayashi): clamp is needed to avoid nan or inf
     return torch.sqrt(torch.clamp(real ** 2 + imag ** 2, min=1e-7)).transpose(2, 1)
 
 
 class SpectralConvergenceLoss(torch.nn.Module):
-    """Spectral convergence loss module."""
+    """Spectral convergence loss module.
 
+    See [Arik et al., 2018](https://arxiv.org/abs/1808.06719). 
+    """
     def __init__(self):
         """Initilize spectral convergence loss module."""
         super(SpectralConvergenceLoss, self).__init__()
@@ -38,8 +39,10 @@ class SpectralConvergenceLoss(torch.nn.Module):
 
 
 class LogSTFTMagnitudeLoss(torch.nn.Module):
-    """Log STFT magnitude loss module."""
-
+    """Log STFT magnitude loss module.
+    
+    See [Arik et al., 2018](https://arxiv.org/abs/1808.06719). 
+    """
     def __init__(self):
         """Initilize los STFT magnitude loss module."""
         super(LogSTFTMagnitudeLoss, self).__init__()
@@ -54,9 +57,12 @@ class LogSTFTMagnitudeLoss(torch.nn.Module):
         """
         return F.l1_loss(torch.log(y_mag), torch.log(x_mag))
 
-class STFTLoss(torch.nn.Module):
-    """STFT loss module."""
 
+class STFTLoss(torch.nn.Module):
+    """STFT loss module.
+    
+    See [Yamamoto et al. 2019](https://arxiv.org/abs/1904.04472).
+    """
     def __init__(self, fft_size=1024, shift_size=120, win_length=600, window="hann_window"):
         """Initialize STFT loss module."""
         super(STFTLoss, self).__init__()
@@ -82,3 +88,59 @@ class STFTLoss(torch.nn.Module):
         mag_loss = self.log_stft_magnitude_loss(x_mag, y_mag)
 
         return sc_loss, mag_loss
+
+
+class MultiResolutionSTFTLoss(torch.nn.Module):
+    """Multi resolution STFT loss module.
+    
+    See [Yamamoto et al., 2019](https://arxiv.org/abs/1910.11480)
+    """
+    def __init__(self,
+                 fft_sizes=[1024, 2048, 512],
+                 hop_sizes=[120, 240, 50],
+                 win_lengths=[600, 1200, 240],
+                 window="hann_window"):
+        """Initialize Multi resolution STFT loss module.
+        Args:
+            fft_sizes (list): List of FFT sizes.
+            hop_sizes (list): List of hop sizes.
+            win_lengths (list): List of window lengths.
+            window (str): Window function type.
+        """
+        super(MultiResolutionSTFTLoss, self).__init__()
+        assert len(fft_sizes) == len(hop_sizes) == len(win_lengths)
+        self.stft_losses = torch.nn.ModuleList()
+        for fs, ss, wl in zip(fft_sizes, hop_sizes, win_lengths):
+            self.stft_losses += [STFTLoss(fs, ss, wl, window)]
+
+    def forward(self, x, y):
+        """Calculate forward propagation.
+        Args:
+            x (Tensor): Predicted signal (B, C, T).
+            y (Tensor): Groundtruth signal (B, C, T).
+        Returns:
+            Tensor: Multi resolution spectral convergence loss value.
+            Tensor: Multi resolution log STFT magnitude loss value.
+        """
+        sc_loss = 0.0
+        mag_loss = 0.0
+        for f in self.stft_losses:
+            sc_l, mag_l = f(x, y)
+            sc_loss += sc_l
+            mag_loss += mag_l
+        sc_loss /= len(self.stft_losses)
+        mag_loss /= len(self.stft_losses)
+
+        return sc_loss + mag_loss
+
+
+class SumAndDiffLoss(torch.nn.Module):
+    """Sum and difference stereo balance loss module.
+    
+    See [Steinmetz et al., 2020](https://arxiv.org/abs/2010.10291)
+    """
+    def __init__(self):
+        super(SumAndDiffLoss, self).__init__()
+
+    def forward(input, target):
+        pass

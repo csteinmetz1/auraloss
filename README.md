@@ -41,7 +41,10 @@ We categorize all loss functions as either time-domain or frequency domain appro
 - Multi-Resolution STFT 
 - Sum and difference (stereo)
 
+## References
+https://zenodo.org/record/4091379
 
+Would be nice to have math (LaTeX) in the docstrings. 
 
 # Cite
 If you use this code in your work please consider citing us.

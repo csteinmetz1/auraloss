@@ -1,4 +1,4 @@
-import torch
+import torch 
 import numpy as np
 import scipy.signal
 
@@ -14,7 +14,7 @@ class FIRFilter(torch.nn.Module):
         plot (bool): Plot the magnitude respond of the filter. Default: False
 
     Based upon the perceptual loss pre-empahsis filters proposed by
-    [Wright and Välimäki, 2019](https://arxiv.org/abs/1911.08922). 
+    [Wright & Välimäki, 2019](https://arxiv.org/abs/1911.08922). 
 
     A-weighting filter - "aw"
     First-order highpass - "hp"
