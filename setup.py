@@ -2,7 +2,7 @@
 # Inspired from https://github.com/kennethreitz/setup.py
 
 from pathlib import Path
-from setuptools import setup
+from setuptools import setup, find_packages
 
 NAME = 'auraloss'
 DESCRIPTION = 'Priority queue with a sane API'
@@ -30,7 +30,7 @@ setup(
     author_email=EMAIL,
     python_requires=REQUIRES_PYTHON,
     url=URL,
-    py_modules=['auraloss'],
+    packages=['auraloss'],
     install_requires=['torch'],
     extras_require={"test": ['resampy']},
     include_package_data=True,

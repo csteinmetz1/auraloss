@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import scipy.signal
 
-from ..utils.plotting import compare_filters
+from .plotting import compare_filters
 
 class FIRFilter(torch.nn.Module):
     """FIR pre-emphasis filtering module.
