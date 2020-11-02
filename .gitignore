@@ -132,3 +132,4 @@ dmypy.json
 .vscode
 data/
 .DS_Store
+lightning_logs/

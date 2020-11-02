@@ -20,10 +20,6 @@ class LibriMixDataset(torch.utils.data.Dataset):
         self.length = length
         self.noisy = noisy
 
-        self.last_idx = 0
-        self.sample = 0
-        self.steps = 0
-
         # set the mix directory if we want clean or noisy mixes as input
         self.mix_dir = "mix_both" if self.noisy else "mix_clean"
 
@@ -45,7 +41,7 @@ class LibriMixDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
 
-        eid = self.files[self.sample]
+        eid = self.files[idx]
 
         # use torchaudio to load them, which should be pretty fast
         s1,    sr = torchaudio.load(os.path.join(self.root_dir, self.subset, "s1", eid))
