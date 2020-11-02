@@ -52,13 +52,18 @@ class LibriMixDataset(torch.utils.data.Dataset):
         # get the length of the current file in samples
         si, ei = torchaudio.info(os.path.join(self.root_dir, self.subset, "s1", eid))
 
+        # pad if too short
+        if si.length < self.length:
+            pad_length = self.length - si.length
+            s1 = torch.nn.functional.pad(s1, (0,pad_length))
+            s2 = torch.nn.functional.pad(s2, (0,pad_length))
+            noise = torch.nn.functional.pad(noise, (0,pad_length))
+            mix = torch.nn.functional.pad(mix, (0,pad_length))
+            si.length = self.length
+
         # choose a random patch of `length` samples for training
-        if self.subset == "train":
-            start_idx = np.random.randint(0, si.length - self.length - 1)
-            stop_idx = start_idx + self.length
-        else:
-            start_idx = 0
-            stop_idx = si.length - 1
+        start_idx = np.random.randint(0, si.length - self.length + 1)
+        stop_idx = start_idx + self.length
 
         # extract these patches from each sample 
         s1    = s1[0,start_idx:stop_idx].unsqueeze(dim=0)

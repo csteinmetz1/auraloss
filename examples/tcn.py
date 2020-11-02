@@ -193,10 +193,14 @@ class TCNModel(pl.LightningModule):
         # flatten the output validation step dicts to a single dict
         outputs = res = {k: v for d in validation_step_outputs for k, v in d.items()} 
         
+        c = outputs["clean_speech"][0].squeeze()
+        p = outputs["pred_speech"][0].squeeze()
+        n = outputs["noisy_speech"][0].squeeze()
+
         # log audio examples
-        self.logger.experiment.add_audio("clean_speech", outputs["clean_speech"], self.global_step, sample_rate=self.hparams.sample_rate)
-        self.logger.experiment.add_audio("pred_speech",  outputs["pred_speech"], self.global_step, sample_rate=self.hparams.sample_rate)
-        self.logger.experiment.add_audio("noisy_speech", outputs["noisy_speech"], self.global_step, sample_rate=self.hparams.sample_rate)
+        self.logger.experiment.add_audio("clean", c, self.global_step, sample_rate=self.hparams.sample_rate)
+        self.logger.experiment.add_audio("pred",  p, self.global_step, sample_rate=self.hparams.sample_rate)
+        self.logger.experiment.add_audio("noisy", n, self.global_step, sample_rate=self.hparams.sample_rate)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
