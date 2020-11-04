@@ -6,12 +6,11 @@ class ESRLoss(torch.nn.Module):
     See [Wright & Välimäki, 2019](https://arxiv.org/abs/1911.08922).
     """
     def __init__(self):
-        super(ESRLoss).__init__()
+        super(ESRLoss, self).__init__()
 
     def forward(self, input, target):
-        return torch.mean((torch.abs(target-input)**2)/(torch.abs(target)**2))
+        return torch.mean(torch.abs(target-input)**2)/torch.mean(torch.abs(target)**2)
 
-        import torch
 
 class DCLoss(torch.nn.Module):
     """DC loss function module. 
