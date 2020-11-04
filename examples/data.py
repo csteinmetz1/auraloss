@@ -37,7 +37,7 @@ class LibriMixDataset(torch.utils.data.Dataset):
         print(f"Located {len(self.files)} examples totaling {self.hours:0.1f} hr in the {self.subset} subset.")
 
     def __len__(self):
-        return len(self.files)
+        return 32 #len(self.files)
 
     def __getitem__(self, idx):
 

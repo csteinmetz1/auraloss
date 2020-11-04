@@ -31,7 +31,6 @@ trainer = pl.Trainer.from_argparse_args(args)
 dict_args = vars(args)
 model = TCNModel(**dict_args)
 
-
 # setup the dataloaders
 train_dataset = LibriMixDataset(args.root_dir, 
                                 subset=args.train_subset,

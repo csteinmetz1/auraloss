@@ -4,7 +4,7 @@ import torchsummary
 import pytorch_lightning as pl
 from argparse import ArgumentParser
 
-from auraloss.freq import MultiResolutionSTFTLoss, RandomResolutionSTFTLoss
+import auraloss
 
 def center_crop(x, shape):
     start = (x.shape[-1]-shape[-1])//2
@@ -104,7 +104,14 @@ class TCNModel(pl.LightningModule):
 
         self.save_hyperparameters()
 
-        self.rrstft = RandomResolutionSTFTLoss()
+        # setup loss functions
+        self.l1      = torch.nn.L1Loss()
+        self.esr     = auraloss.time.ESRLoss()
+        self.dc      = auraloss.time.DCLoss()
+        self.logcosh = auraloss.time.LogCoshLoss()
+        self.stft    = auraloss.freq.STFTLoss()
+        self.mrstft  = auraloss.freq.MultiResolutionSTFTLoss()
+        self.rrstft  = auraloss.freq.RandomResolutionSTFTLoss()
 
         self.blocks = torch.nn.ModuleList()
         for n in range(nblocks):
@@ -151,8 +158,8 @@ class TCNModel(pl.LightningModule):
         clean_speech = center_crop(clean_speech, pred_speech.shape)
 
         # compute the error using appropriate loss
-        #loss = torch.nn.functional.l1_loss(pred_speech,clean_speech)
-        loss = self.rrstft(pred_speech, clean_speech)
+        #loss = torch.stack(self.rrstft(pred_speech, clean_speech),dim=0).sum()
+        loss = self.logcosh(pred_speech, clean_speech)
 
         self.log('train_loss', 
                  loss, 
@@ -174,11 +181,31 @@ class TCNModel(pl.LightningModule):
         # crop the clean speech 
         clean_speech = center_crop(clean_speech, pred_speech.shape)
 
-        # compute the error using appropriate loss
-        #loss = torch.nn.functional.l1_loss(pred_speech,clean_speech)
-        loss = self.rrstft(pred_speech, clean_speech)
+        # compute the validation error using all losses
+        l1_loss      = self.l1(pred_speech, clean_speech)
+        esr_loss     = self.esr(pred_speech, clean_speech)
+        dc_loss      = self.dc(pred_speech, clean_speech)
+        logcosh_loss = self.logcosh(pred_speech, clean_speech)
+        stft_loss    = torch.stack(self.stft(pred_speech, clean_speech),dim=0).sum()
+        mrstft_loss  = torch.stack(self.mrstft(pred_speech, clean_speech),dim=0).sum()
+        rrstft_loss  = torch.stack(self.rrstft(pred_speech, clean_speech),dim=0).sum()
 
-        self.log('val_loss', loss)
+        aggregate_loss = l1_loss + \
+                         esr_loss + \
+                         dc_loss + \
+                         logcosh_loss + \
+                         stft_loss + \
+                         mrstft_loss + \
+                         rrstft_loss
+
+        self.log('val_loss', aggregate_loss)
+        self.log('val_loss/L1', l1_loss)
+        self.log('val_loss/ESR', esr_loss)
+        self.log('val_loss/DC', dc_loss)
+        self.log('val_loss/LogCosh', logcosh_loss)
+        self.log('val_loss/STFT', stft_loss)
+        self.log('val_loss/MRSTFT', mrstft_loss)
+        self.log('val_loss/RRSTFT', rrstft_loss)
 
         # move tensors to cpu for logging
         outputs = {

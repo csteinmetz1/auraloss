@@ -7,4 +7,5 @@ python examples/train_denoise.py \
 --depthwise True \
 --channel_width 16 \
 --dilation_growth 2 \
+--lr 0.004 \
 --auto_lr_find 
