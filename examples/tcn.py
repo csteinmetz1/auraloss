@@ -12,8 +12,27 @@ def center_crop(x, shape):
 
     return x[...,start:stop]
 
+class FiLM(torch.nn.Module):
+    def __init__(self, num_features, cond_dim):
+        super(FiLM, self).__init__()
+        self.num_features = num_features
+        self.bn = torch.nn.BatchNorm1d(num_features, affine=False)
+        self.adaptor = torch.nn.Linear(cond_dim, num_features * 2)
+
+    def forward(self, x, cond):
+
+        cond = self.adaptor(cond)
+        g, b = torch.chunk(cond, 2, dim=-1)
+        g = g.permute(0,2,1)
+        b = b.permute(0,2,1)
+
+        x = self.bn(x)      # apply BatchNorm without affine
+        x = (x * g) + b     # then apply conditional affine
+
+        return x
+
 class TCNBlock(torch.nn.Module):
-    def __init__(self, in_ch, out_ch, kernel_size=3, padding=0, dilation=1, depthwise=False):
+    def __init__(self, in_ch, out_ch, kernel_size=3, padding=0, dilation=1, depthwise=False, conditional=False):
         super(TCNBlock, self).__init__()
 
         self.in_ch = in_ch
@@ -22,8 +41,10 @@ class TCNBlock(torch.nn.Module):
         self.padding = padding
         self.dilation = dilation
         self.depthwise = depthwise
+        self.conditional = conditional
 
         groups = out_ch if depthwise and (in_ch % out_ch == 0) else 1
+        print(depthwise, groups)
 
         self.conv1 = torch.nn.Conv1d(in_ch, 
                                      out_ch, 
@@ -45,25 +66,32 @@ class TCNBlock(torch.nn.Module):
             self.conv2b = torch.nn.Conv1d(out_ch, out_ch, kernel_size=1)
 
         self.bn1 = torch.nn.BatchNorm1d(in_ch)
-        self.bn2 = torch.nn.BatchNorm1d(out_ch)
+
+        if conditional:
+            self.film = FiLM(out_ch, 64)
+        else:
+            self.bn2 = torch.nn.BatchNorm1d(out_ch)
 
         self.relu1 = torch.nn.LeakyReLU()
         self.relu2 = torch.nn.LeakyReLU()
 
         self.res = torch.nn.Conv1d(in_ch, out_ch, kernel_size=1, bias=False)
 
-    def forward(self, x):
-
+    def forward(self, x, p=None):
         x_in = x
 
         x = self.bn1(x)
         x = self.relu1(x)
         x = self.conv1(x)
 
-        if self.depthwise:
+        if self.depthwise: # apply pointwise conv
             x = self.conv1b(x)
 
-        x = self.bn2(x)
+        if p is not None:   # apply FiLM conditioning
+            x = self.film(x, p)
+        else:
+            x = self.bn2(x)
+
         x = self.relu2(x)
         x = self.conv2(x)
 
@@ -76,9 +104,10 @@ class TCNBlock(torch.nn.Module):
         return x
 
 class TCNModel(pl.LightningModule):
-    """ Temporal convolutional network module.
+    """ Temporal convolutional network with conditioning module.
 
         Params:
+            nparams (int): Number of conditioning parameters.
             ninputs (int): Number of input channels (mono = 1, stereo 2). Default: 1
             ninputs (int): Number of output channels (mono = 1, stereo 2). Default: 1
             nblocks (int): Number of total TCN blocks. Default: 10
@@ -90,6 +119,7 @@ class TCNModel(pl.LightningModule):
             depthwise (bool): Use depthwise-separable convolutions to reduce the total number of parameters. Default: False
         """
     def __init__(self, 
+                 nparams,
                  ninputs=1,
                  noutputs=1,
                  nblocks=10, 
@@ -113,6 +143,16 @@ class TCNModel(pl.LightningModule):
         self.mrstft  = auraloss.freq.MultiResolutionSTFTLoss()
         self.rrstft  = auraloss.freq.RandomResolutionSTFTLoss()
 
+        if nparams > 0:
+            self.gen = torch.nn.Sequential(
+                torch.nn.Linear(nparams, 16),
+                torch.nn.PReLU(),
+                torch.nn.Linear(16, 32),
+                torch.nn.PReLU(),
+                torch.nn.Linear(32, 64),
+                torch.nn.PReLU()
+            )
+
         self.blocks = torch.nn.ModuleList()
         for n in range(nblocks):
             in_ch = out_ch if n > 0 else ninputs
@@ -123,17 +163,24 @@ class TCNModel(pl.LightningModule):
                                         out_ch, 
                                         kernel_size=kernel_size, 
                                         dilation=dilation,
-                                        depthwise=depthwise))
+                                        depthwise=self.hparams.depthwise,
+                                        conditional=True if nparams > 0 else False))
 
-        self.blocks.append(torch.nn.Sequential(
-            torch.nn.Conv1d(out_ch, noutputs, kernel_size=1)
-        ))
+        self.output = torch.nn.Conv1d(out_ch, noutputs, kernel_size=1)
 
+    def forward(self, x, p=None):
+        # if parameters present, 
+        # compute global conditioning
+        if p is not None:
+            cond = self.gen(p)
+        else:
+            cond = None
 
-    def forward(self, x):
+        # iterate over blocks passing conditioning
         for block in self.blocks:
-            x = block(x)
-        return x
+            x = block(x, cond)
+
+        return self.output(x)
 
     def compute_receptive_field(self):
         """ Compute the receptive field in samples."""
@@ -145,21 +192,29 @@ class TCNModel(pl.LightningModule):
         return rf
 
     def training_step(self, batch, batch_idx):
-        s1, s2, noise, _ = batch
+        input, target, params = batch
 
-        # select either speaker 1 or 2 at random
-        clean_speech = s1 if np.random.rand() > 0.5 else s2
-        
-        # pass the noisy speech through the model
-        noisy_speech = clean_speech + noise
-        pred_speech = self(noisy_speech)
+        # pass the input thrgouh the mode
+        pred = self(input, params)
 
-        # crop the clean speech 
-        clean_speech = center_crop(clean_speech, pred_speech.shape)
+        # crop the target signal 
+        target = center_crop(target, pred.shape)
 
-        # compute the error using appropriate loss
-        #loss = torch.stack(self.rrstft(pred_speech, clean_speech),dim=0).sum()
-        loss = self.logcosh(pred_speech, clean_speech)
+        # compute the error using appropriate loss      
+        if   self.hparams.train_loss == "l1":
+            loss = self.l1(pred, target)
+        elif self.hparams.train_loss == "esr+dc":
+            loss = self.esr(pred, target) + self.dc(pred, target)
+        elif self.hparams.train_loss == "logcosh":
+            loss = self.logcosh(pred, target)
+        elif self.hparams.train_loss == "stft":
+            loss = torch.stack(self.stft(pred, target),dim=0).sum()
+        elif self.hparams.train_loss == "mrstft":
+            loss = torch.stack(self.mrstft(pred, target),dim=0).sum()
+        elif self.hparams.train_loss == "rrstft":
+            loss = torch.stack(self.rrstft(pred, target),dim=0).sum()
+        else:
+            raise NotImplementedError(f"Invalid loss fn: {self.hparams.train_loss}")
 
         self.log('train_loss', 
                  loss, 
@@ -171,24 +226,22 @@ class TCNModel(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        s1, s2, noise, _ = batch
-        clean_speech = s1 if np.random.rand() > 0.5 else s2
+        input, target, params = batch
 
-        # pass the noisy speech through the model
-        noisy_speech = clean_speech + noise
-        pred_speech = self(noisy_speech)
+        # pass the input thrgouh the mode
+        pred = self(input, params)
 
-        # crop the clean speech 
-        clean_speech = center_crop(clean_speech, pred_speech.shape)
+        # crop the target signal 
+        target = center_crop(target, pred.shape)
 
         # compute the validation error using all losses
-        l1_loss      = self.l1(pred_speech, clean_speech)
-        esr_loss     = self.esr(pred_speech, clean_speech)
-        dc_loss      = self.dc(pred_speech, clean_speech)
-        logcosh_loss = self.logcosh(pred_speech, clean_speech)
-        stft_loss    = torch.stack(self.stft(pred_speech, clean_speech),dim=0).sum()
-        mrstft_loss  = torch.stack(self.mrstft(pred_speech, clean_speech),dim=0).sum()
-        rrstft_loss  = torch.stack(self.rrstft(pred_speech, clean_speech),dim=0).sum()
+        l1_loss      = self.l1(pred, target)
+        esr_loss     = self.esr(pred, target)
+        dc_loss      = self.dc(pred, target)
+        logcosh_loss = self.logcosh(pred, target)
+        stft_loss    = torch.stack(self.stft(pred, target),dim=0).sum()
+        mrstft_loss  = torch.stack(self.mrstft(pred, target),dim=0).sum()
+        rrstft_loss  = torch.stack(self.rrstft(pred, target),dim=0).sum()
 
         aggregate_loss = l1_loss + \
                          esr_loss + \
@@ -209,10 +262,9 @@ class TCNModel(pl.LightningModule):
 
         # move tensors to cpu for logging
         outputs = {
-            "clean_speech" : clean_speech.cpu().numpy(),
-            "pred_speech"  : pred_speech.cpu().numpy(),
-            "noisy_speech" : noisy_speech.cpu().numpy(),
-        }
+            "input" : target.cpu().numpy(),
+            "target" : target.cpu().numpy(),
+            "pred"  : pred.cpu().numpy()}
 
         return outputs
 
@@ -220,14 +272,14 @@ class TCNModel(pl.LightningModule):
         # flatten the output validation step dicts to a single dict
         outputs = res = {k: v for d in validation_step_outputs for k, v in d.items()} 
         
-        c = outputs["clean_speech"][0].squeeze()
-        p = outputs["pred_speech"][0].squeeze()
-        n = outputs["noisy_speech"][0].squeeze()
+        c = outputs["input"][0].squeeze()
+        c = outputs["target"][0].squeeze()
+        p = outputs["pred"][0].squeeze()
 
         # log audio examples
-        self.logger.experiment.add_audio("clean", c, self.global_step, sample_rate=self.hparams.sample_rate)
-        self.logger.experiment.add_audio("pred",  p, self.global_step, sample_rate=self.hparams.sample_rate)
-        self.logger.experiment.add_audio("noisy", n, self.global_step, sample_rate=self.hparams.sample_rate)
+        self.logger.experiment.add_audio("input", c, self.global_step, sample_rate=self.hparams.sample_rate)
+        self.logger.experiment.add_audio("target", c, self.global_step, sample_rate=self.hparams.sample_rate)
+        self.logger.experiment.add_audio("pred",   p, self.global_step, sample_rate=self.hparams.sample_rate)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
@@ -245,9 +297,10 @@ class TCNModel(pl.LightningModule):
         parser.add_argument('--channel_growth', type=int, default=1)
         parser.add_argument('--channel_width', type=int, default=64)
         parser.add_argument('--stack_size', type=int, default=10)
-        parser.add_argument('--depthwise', type=bool, default=False)
+        parser.add_argument('--depthwise', default=False, action='store_true')
         # --- training related ---
         parser.add_argument('--lr', type=float, default=1e-3)
+        parser.add_argument('--train_loss', type=str, default="l1")
 
         return parser
 
