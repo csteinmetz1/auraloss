@@ -74,16 +74,18 @@ class LibriMixDataset(torch.utils.data.Dataset):
 
 class SignalTrainLA2ADataset(torch.utils.data.Dataset):
     """ SignalTrain LA2A dataset. Source: [10.5281/zenodo.3824876](https://zenodo.org/record/3824876)."""
-    def __init__(self, root_dir, subset="train", length=16384, noisy=False):
+    def __init__(self, root_dir, subset="train", length=16384, preload=False):
         """
         Args:
             root_dir (str): Path to the root directory of the SignalTrain dataset.
             subset (str, optional): Pull data either from "train", "val", or "test" subsets. (Default: "train")
             length (int, optional): Number of samples in the returned examples. (Default: 40)
+            preload (bool, optional): Read in all data into RAM during init. (Default: False)
         """
         self.root_dir = root_dir
         self.subset = subset
         self.length = length
+        self.preload = preload
 
         # get all the target files files in the directory first
         self.target_files = glob.glob(os.path.join(self.root_dir, self.subset.capitalize(), "target_*.wav"))
@@ -91,40 +93,73 @@ class SignalTrainLA2ADataset(torch.utils.data.Dataset):
         self.params       = [(float(f.split("__")[1].replace(".wav","")), float(f.split("__")[2].replace(".wav",""))) for f in self.target_files]
 
         self.examples = [] 
+        self.audio_files = []
         self.hours = 0  # total number of hours of data in the subset
 
+        # ensure that the sets are ordered correctlty
+        self.target_files.sort()
+        self.input_files.sort()
+
         # loop over files to count total length
-        for tfile, ifile, params in zip(self.target_files, self.input_files, self.params):
-            si, ei = torchaudio.info(tfile)
-            self.hours += (si.length / si.rate) / 3600 
+        for idx, (tfile, ifile, params) in enumerate(zip(self.target_files, self.input_files, self.params)):
+            print(os.path.basename(tfile), os.path.basename(ifile))
+            md = torchaudio.info(tfile)
+            self.hours += (md.num_frames / md.sample_rate) / 3600 
+            num_frames = md.num_frames
+
+            if self.preload:
+              output.clear('status_text')
+              with output.use_tags('status_text'):
+                print(f"* Pre-loading... {idx+1:3d}/{len(self.target_files):3d} ...")
+              input, sr  = torchaudio.load(ifile, normalize=False)
+              target, sr = torchaudio.load(tfile, normalize=False)
+
+              num_frames = int(torch.min(input.shape[-1], target.shape[-1]))
+
+              input = input.half()
+              target = target.half()
+              self.audio_files.append({"target" : target, "input" : input})
 
             # create one entry for each patch
-            for n in range(si.length // self.length):
-                offset = n * self.length
-                self.examples.append({"target" : tfile, "input" : ifile, "params" : params, "offset": offset})
+            for n in range((num_frames // self.length) - 1):
+                offset = int(n * self.length)
+                self.examples.append({"idx": idx, 
+                                      "target_file" : tfile, 
+                                      "input_file" : ifile, 
+                                      "params" : params, 
+                                      "offset": offset, 
+                                      "frames" : num_frames})
 
         # we then want to get the input files
         print(f"Located {len(self.examples)} examples totaling {self.hours:0.1f} hr in the {self.subset} subset.")
 
     def __len__(self):
-        return 32 #len(self.examples)
+        return len(self.examples)
 
     def __getitem__(self, idx):
-
-        # select the starting offset for reading the file
-        offset = np.clip(self.examples[idx]["offset"] + np.random.randint(-20,20), a_min=0, a_max=None)
-
-        # use torchaudio to load them, which should be pretty fast
-        input, sr  = torchaudio.load(self.examples[idx]["input"], num_frames=self.length, offset=offset, normalization=False)
-        target, sr = torchaudio.load(self.examples[idx]["target"], num_frames=self.length, offset=offset, normalization=False)
-        
-        # apply float32 normalization
-        input /= ((2**31) - 1)
-        target /= ((2**31) - 1)
+        if self.preload:
+          audio_idx = self.examples[idx]["idx"]
+          offset = self.examples[idx]["offset"]
+          input = self.audio_files[audio_idx]["input"][:,offset:offset+self.length]
+          target = self.audio_files[audio_idx]["target"][:,offset:offset+self.length]
+        else:
+          offset = self.examples[idx]["offset"] 
+          input, sr  = torchaudio.load(self.examples[idx]["input"], 
+                                      num_frames=self.length, 
+                                       frame_offset=offset, 
+                                       normalize=False)
+          target, sr = torchaudio.load(self.examples[idx]["target"], 
+                                       num_frames=self.length, 
+                                       frame_offset=offset, 
+                                       normalize=False)
+          # apply float32 normalization
+          input /= ((2**31) - 1)
+          target /= ((2**31) - 1)
 
         # at random with p=0.5 flip the phase 
-        input *= -1
-        target *= -1
+        if np.random.rand() > 0.5:
+          input *= -1
+          target *= -1
 
         # then get the tuple of parameters
         params = torch.tensor(self.examples[idx]["params"]).unsqueeze(0)

@@ -10,6 +10,9 @@ parser = ArgumentParser()
 
 # add PROGRAM level args
 parser.add_argument('--root_dir', type=str, default='./data')
+parser.add_argument('--preload', type=bool, default=False)
+parser.add_argument('--max_epochs', type=int, default=10)
+parser.add_argument('--precision', type=int, default=32)
 parser.add_argument('--sample_rate', type=int, default=44100)
 parser.add_argument('--shuffle', type=bool, default=False)
 parser.add_argument('--train_subset', type=str, default='train')

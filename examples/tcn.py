@@ -9,7 +9,6 @@ import auraloss
 def center_crop(x, shape):
     start = (x.shape[-1]-shape[-1])//2
     stop  = start + shape[-1]
-
     return x[...,start:stop]
 
 class FiLM(torch.nn.Module):
@@ -44,7 +43,6 @@ class TCNBlock(torch.nn.Module):
         self.conditional = conditional
 
         groups = out_ch if depthwise and (in_ch % out_ch == 0) else 1
-        print(depthwise, groups)
 
         self.conv1 = torch.nn.Conv1d(in_ch, 
                                      out_ch, 
@@ -53,35 +51,21 @@ class TCNBlock(torch.nn.Module):
                                      dilation=dilation,
                                      groups=groups,
                                      bias=False)
-        self.conv2 = torch.nn.Conv1d(out_ch, 
-                                     out_ch, 
-                                     kernel_size=kernel_size, 
-                                     padding=padding, 
-                                     dilation=1,
-                                     groups=groups,
-                                     bias=False)
-
         if depthwise:
             self.conv1b = torch.nn.Conv1d(out_ch, out_ch, kernel_size=1)
-            self.conv2b = torch.nn.Conv1d(out_ch, out_ch, kernel_size=1)
-
-        self.bn1 = torch.nn.BatchNorm1d(in_ch)
 
         if conditional:
             self.film = FiLM(out_ch, 64)
         else:
-            self.bn2 = torch.nn.BatchNorm1d(out_ch)
+            self.bn = torch.nn.BatchNorm1d(out_ch)
 
-        self.relu1 = torch.nn.LeakyReLU()
-        self.relu2 = torch.nn.LeakyReLU()
+        self.relu = torch.nn.PReLU()
 
         self.res = torch.nn.Conv1d(in_ch, out_ch, kernel_size=1, bias=False)
 
     def forward(self, x, p=None):
         x_in = x
 
-        x = self.bn1(x)
-        x = self.relu1(x)
         x = self.conv1(x)
 
         if self.depthwise: # apply pointwise conv
@@ -90,13 +74,9 @@ class TCNBlock(torch.nn.Module):
         if p is not None:   # apply FiLM conditioning
             x = self.film(x, p)
         else:
-            x = self.bn2(x)
+            x = self.bn(x)
 
-        x = self.relu2(x)
-        x = self.conv2(x)
-
-        if self.depthwise:
-            x = self.conv2b(x)
+        x = self.relu(x)
 
         x_res = self.res(x_in)
         x = x + center_crop(x_res, x.shape)
@@ -247,8 +227,8 @@ class TCNModel(pl.LightningModule):
                          esr_loss + \
                          dc_loss + \
                          logcosh_loss + \
-                         stft_loss + \
                          mrstft_loss + \
+                         stft_loss + \
                          rrstft_loss
 
         self.log('val_loss', aggregate_loss)
@@ -262,8 +242,8 @@ class TCNModel(pl.LightningModule):
 
         # move tensors to cpu for logging
         outputs = {
-            "input" : target.cpu().numpy(),
-            "target" : target.cpu().numpy(),
+            "input" : input.cpu().numpy(),
+            "target": target.cpu().numpy(),
             "pred"  : pred.cpu().numpy()}
 
         return outputs
@@ -272,12 +252,12 @@ class TCNModel(pl.LightningModule):
         # flatten the output validation step dicts to a single dict
         outputs = res = {k: v for d in validation_step_outputs for k, v in d.items()} 
         
-        c = outputs["input"][0].squeeze()
+        i = outputs["input"][0].squeeze()
         c = outputs["target"][0].squeeze()
         p = outputs["pred"][0].squeeze()
 
         # log audio examples
-        self.logger.experiment.add_audio("input", c, self.global_step, sample_rate=self.hparams.sample_rate)
+        self.logger.experiment.add_audio("input", i, self.global_step, sample_rate=self.hparams.sample_rate)
         self.logger.experiment.add_audio("target", c, self.global_step, sample_rate=self.hparams.sample_rate)
         self.logger.experiment.add_audio("pred",   p, self.global_step, sample_rate=self.hparams.sample_rate)
 
@@ -303,9 +283,3 @@ class TCNModel(pl.LightningModule):
         parser.add_argument('--train_loss', type=str, default="l1")
 
         return parser
-
-if __name__ == '__main__':
-    model = TCNModel(1, 1, 10, 3, 3, 1, 64, 10, True)
-    rf = model.compute_receptive_field()
-    torchsummary.summary(model, (1,131072))
-    print(f"{(rf / 44100) * 1000:0.2f} ms")
