@@ -1,8 +1,10 @@
 import os
+import sys
 import glob
 import torch 
 import torchaudio
 import numpy as np
+torchaudio.set_audio_backend("sox_io")
 
 class LibriMixDataset(torch.utils.data.Dataset):
     """ LibriMix dataset."""
@@ -102,23 +104,21 @@ class SignalTrainLA2ADataset(torch.utils.data.Dataset):
 
         # loop over files to count total length
         for idx, (tfile, ifile, params) in enumerate(zip(self.target_files, self.input_files, self.params)):
-            print(os.path.basename(tfile), os.path.basename(ifile))
             md = torchaudio.info(tfile)
             self.hours += (md.num_frames / md.sample_rate) / 3600 
             num_frames = md.num_frames
 
             if self.preload:
-              output.clear('status_text')
-              with output.use_tags('status_text'):
-                print(f"* Pre-loading... {idx+1:3d}/{len(self.target_files):3d} ...")
-              input, sr  = torchaudio.load(ifile, normalize=False)
-              target, sr = torchaudio.load(tfile, normalize=False)
+                sys.stdout.write(f"* Pre-loading... {idx+1:3d}/{len(self.target_files):3d} ...\r")
+                sys.stdout.flush()
+                input, sr  = torchaudio.load(ifile, normalize=False)
+                target, sr = torchaudio.load(tfile, normalize=False)
 
-              num_frames = int(torch.min(input.shape[-1], target.shape[-1]))
+                num_frames = int(np.min([input.shape[-1], target.shape[-1]]))
 
-              input = input.half()
-              target = target.half()
-              self.audio_files.append({"target" : target, "input" : input})
+                input = input.half()
+                target = target.half()
+                self.audio_files.append({"target" : target, "input" : input})
 
             # create one entry for each patch
             for n in range((num_frames // self.length) - 1):
@@ -130,6 +130,8 @@ class SignalTrainLA2ADataset(torch.utils.data.Dataset):
                                       "offset": offset, 
                                       "frames" : num_frames})
 
+            #if idx > 10: break
+
         # we then want to get the input files
         print(f"Located {len(self.examples)} examples totaling {self.hours:0.1f} hr in the {self.subset} subset.")
 
@@ -138,28 +140,28 @@ class SignalTrainLA2ADataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         if self.preload:
-          audio_idx = self.examples[idx]["idx"]
-          offset = self.examples[idx]["offset"]
-          input = self.audio_files[audio_idx]["input"][:,offset:offset+self.length]
-          target = self.audio_files[audio_idx]["target"][:,offset:offset+self.length]
+            audio_idx = self.examples[idx]["idx"]
+            offset = self.examples[idx]["offset"]
+            input = self.audio_files[audio_idx]["input"][:,offset:offset+self.length]
+            target = self.audio_files[audio_idx]["target"][:,offset:offset+self.length]
         else:
-          offset = self.examples[idx]["offset"] 
-          input, sr  = torchaudio.load(self.examples[idx]["input"], 
-                                      num_frames=self.length, 
-                                       frame_offset=offset, 
-                                       normalize=False)
-          target, sr = torchaudio.load(self.examples[idx]["target"], 
-                                       num_frames=self.length, 
-                                       frame_offset=offset, 
-                                       normalize=False)
-          # apply float32 normalization
-          input /= ((2**31) - 1)
-          target /= ((2**31) - 1)
+            offset = self.examples[idx]["offset"] 
+            input, sr  = torchaudio.load(self.examples[idx]["input_file"], 
+                                        num_frames=self.length, 
+                                        frame_offset=offset, 
+                                        normalize=False)
+            target, sr = torchaudio.load(self.examples[idx]["target_file"], 
+                                        num_frames=self.length, 
+                                        frame_offset=offset, 
+                                        normalize=False)
+            # apply float32 normalization
+            input /= ((2**31) - 1)
+            target /= ((2**31) - 1)
 
         # at random with p=0.5 flip the phase 
         if np.random.rand() > 0.5:
-          input *= -1
-          target *= -1
+            input *= -1
+            target *= -1
 
         # then get the tuple of parameters
         params = torch.tensor(self.examples[idx]["params"]).unsqueeze(0)

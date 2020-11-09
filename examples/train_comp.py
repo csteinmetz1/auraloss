@@ -11,8 +11,6 @@ parser = ArgumentParser()
 # add PROGRAM level args
 parser.add_argument('--root_dir', type=str, default='./data')
 parser.add_argument('--preload', type=bool, default=False)
-parser.add_argument('--max_epochs', type=int, default=10)
-parser.add_argument('--precision', type=int, default=32)
 parser.add_argument('--sample_rate', type=int, default=44100)
 parser.add_argument('--shuffle', type=bool, default=False)
 parser.add_argument('--train_subset', type=str, default='train')
@@ -37,6 +35,7 @@ trainer = pl.Trainer.from_argparse_args(args)
 # setup the dataloaders
 train_dataset = SignalTrainLA2ADataset(args.root_dir, 
                                 subset=args.train_subset,
+                                preload=args.preload,
                                 length=args.train_length)
 
 train_dataloader = torch.utils.data.DataLoader(train_dataset, 
@@ -45,11 +44,12 @@ train_dataloader = torch.utils.data.DataLoader(train_dataset,
                                                num_workers=args.num_workers)
 
 val_dataset = SignalTrainLA2ADataset(args.root_dir, 
+                                preload=args.preload,
                                 subset=args.val_subset,
                                 length=args.eval_length)
 
 val_dataloader = torch.utils.data.DataLoader(val_dataset, 
-                                             shuffle=args.shuffle,
+                                             shuffle=False,
                                              batch_size=args.batch_size,
                                              num_workers=args.num_workers)
 
@@ -60,7 +60,7 @@ model = TCNModel(**dict_args)
 # find proper learning rate
 trainer.tune(model, train_dataloader)
 
-torchsummary.summary(model, [(1,args.eval_length), (1,2)])
+#torchsummary.summary(model, [(1,args.eval_length), (1,2)])
 
 # train!
 trainer.fit(model, train_dataloader, val_dataloader)

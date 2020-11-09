@@ -31,7 +31,7 @@ class FiLM(torch.nn.Module):
         return x
 
 class TCNBlock(torch.nn.Module):
-    def __init__(self, in_ch, out_ch, kernel_size=3, padding=0, dilation=1, depthwise=False, conditional=False):
+    def __init__(self, in_ch, out_ch, kernel_size=3, padding=0, dilation=1, depthwise=False, conditional=False, **kwargs):
         super(TCNBlock, self).__init__()
 
         self.in_ch = in_ch
