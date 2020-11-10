@@ -55,27 +55,27 @@ class TCNBlock(torch.nn.Module):
             self.conv1b = torch.nn.Conv1d(out_ch, out_ch, kernel_size=1)
 
         if conditional:
-            self.film = FiLM(out_ch, 64)
+            self.film = FiLM(out_ch, 128)
         else:
             self.bn = torch.nn.BatchNorm1d(out_ch)
 
-        self.relu = torch.nn.PReLU()
-
-        self.res = torch.nn.Conv1d(in_ch, out_ch, kernel_size=1, bias=False)
+        self.relu = torch.nn.PReLU(out_ch)
+        self.res = torch.nn.Conv1d(in_ch, 
+                                   out_ch, 
+                                   kernel_size=1,
+                                   groups=in_ch,
+                                   bias=False)
 
     def forward(self, x, p=None):
         x_in = x
 
         x = self.conv1(x)
-
         if self.depthwise: # apply pointwise conv
             x = self.conv1b(x)
-
         if p is not None:   # apply FiLM conditioning
             x = self.film(x, p)
         else:
             x = self.bn(x)
-
         x = self.relu(x)
 
         x_res = self.res(x_in)
@@ -89,7 +89,7 @@ class TCNModel(pl.LightningModule):
         Params:
             nparams (int): Number of conditioning parameters.
             ninputs (int): Number of input channels (mono = 1, stereo 2). Default: 1
-            ninputs (int): Number of output channels (mono = 1, stereo 2). Default: 1
+            noutputs (int): Number of output channels (mono = 1, stereo 2). Default: 1
             nblocks (int): Number of total TCN blocks. Default: 10
             kernel_size (int): Width of the convolutional kernels. Default: 3
             dialation_growth (int): Compute the dilation factor at each block as dilation_growth ** (n % stack_size). Default: 1
@@ -97,6 +97,7 @@ class TCNModel(pl.LightningModule):
             channel_width (int): When channel_growth = 1 all blocks use convolutions with this many channels. Default: 64
             stack_size (int): Number of blocks that constitute a single stack of blocks. Default: 10
             depthwise (bool): Use depthwise-separable convolutions to reduce the total number of parameters. Default: False
+            num_examples (int): Number of evaluation audio examples to log after each epochs. Default: 4
         """
     def __init__(self, 
                  nparams,
@@ -109,6 +110,7 @@ class TCNModel(pl.LightningModule):
                  channel_width=64, 
                  stack_size=10,
                  depthwise=False,
+                 num_examples=4,
                  **kwargs):
         super(TCNModel, self).__init__()
 
@@ -125,11 +127,11 @@ class TCNModel(pl.LightningModule):
 
         if nparams > 0:
             self.gen = torch.nn.Sequential(
-                torch.nn.Linear(nparams, 16),
-                torch.nn.PReLU(),
-                torch.nn.Linear(16, 32),
+                torch.nn.Linear(nparams, 32),
                 torch.nn.PReLU(),
                 torch.nn.Linear(32, 64),
+                torch.nn.PReLU(),
+                torch.nn.Linear(64, 128),
                 torch.nn.PReLU()
             )
 
@@ -157,10 +159,14 @@ class TCNModel(pl.LightningModule):
             cond = None
 
         # iterate over blocks passing conditioning
-        for block in self.blocks:
+        for idx, block in enumerate(self.blocks):
             x = block(x, cond)
+            if idx == 0:
+                skips = x
+            else:
+                skips = center_crop(skips, x.shape) + x
 
-        return self.output(x)
+        return torch.tanh(self.output(x + skips))
 
     def compute_receptive_field(self):
         """ Compute the receptive field in samples."""
@@ -211,17 +217,18 @@ class TCNModel(pl.LightningModule):
         # pass the input thrgouh the mode
         pred = self(input, params)
 
-        # crop the target signal 
-        target = center_crop(target, pred.shape)
+        # crop the input and target signals
+        input_crop = center_crop(input, pred.shape)
+        target_crop = center_crop(target, pred.shape)
 
         # compute the validation error using all losses
-        l1_loss      = self.l1(pred, target)
-        esr_loss     = self.esr(pred, target)
-        dc_loss      = self.dc(pred, target)
-        logcosh_loss = self.logcosh(pred, target)
-        stft_loss    = torch.stack(self.stft(pred, target),dim=0).sum()
-        mrstft_loss  = torch.stack(self.mrstft(pred, target),dim=0).sum()
-        rrstft_loss  = torch.stack(self.rrstft(pred, target),dim=0).sum()
+        l1_loss      = self.l1(pred, target_crop)
+        esr_loss     = self.esr(pred, target_crop)
+        dc_loss      = self.dc(pred, target_crop)
+        logcosh_loss = self.logcosh(pred, target_crop)
+        stft_loss    = torch.stack(self.stft(pred, target_crop),dim=0).sum()
+        mrstft_loss  = torch.stack(self.mrstft(pred, target_crop),dim=0).sum()
+        rrstft_loss  = torch.stack(self.rrstft(pred, target_crop),dim=0).sum()
 
         aggregate_loss = l1_loss + \
                          esr_loss + \
@@ -242,27 +249,57 @@ class TCNModel(pl.LightningModule):
 
         # move tensors to cpu for logging
         outputs = {
-            "input" : input.cpu().numpy(),
-            "target": target.cpu().numpy(),
-            "pred"  : pred.cpu().numpy()}
+            "input" : input_crop.cpu().numpy(),
+            "target": target_crop.cpu().numpy(),
+            "pred"  : pred.cpu().numpy(),
+            "params" : params.cpu().numpy()}
 
         return outputs
 
     def validation_epoch_end(self, validation_step_outputs):
         # flatten the output validation step dicts to a single dict
-        outputs = res = {k: v for d in validation_step_outputs for k, v in d.items()} 
-        
-        i = outputs["input"][0].squeeze()
-        c = outputs["target"][0].squeeze()
-        p = outputs["pred"][0].squeeze()
+        outputs = {
+            "input" : [],
+            "target" : [],
+            "pred" : [],
+            "params" : []}
 
-        # log audio examples
-        self.logger.experiment.add_audio("input", i, self.global_step, sample_rate=self.hparams.sample_rate)
-        self.logger.experiment.add_audio("target", c, self.global_step, sample_rate=self.hparams.sample_rate)
-        self.logger.experiment.add_audio("pred",   p, self.global_step, sample_rate=self.hparams.sample_rate)
+        for out in validation_step_outputs:
+            for key, val in out.items():
+                bs = val.shape[0]
+                for bidx in np.arange(bs):
+                    outputs[key].append(val[bidx,...])
+
+        example_indices = np.arange(len(outputs["input"]))
+        rand_indices = np.random.choice(example_indices,
+                                        replace=False,
+                                        size=np.min([len(outputs["input"]), self.hparams.num_examples]))
+        
+        for idx, rand_idx in enumerate(list(rand_indices)):
+            i = outputs["input"][rand_idx].squeeze()
+            t = outputs["target"][rand_idx].squeeze()
+            p = outputs["pred"][rand_idx].squeeze()
+            prm = outputs["params"][rand_idx].squeeze()
+
+            # log audio examples
+            self.logger.experiment.add_audio(f"input/{idx}",  
+                                             i, self.global_step, 
+                                             sample_rate=self.hparams.sample_rate)
+            self.logger.experiment.add_audio(f"target/{idx}", 
+                                             t, self.global_step, 
+                                             sample_rate=self.hparams.sample_rate)
+            self.logger.experiment.add_audio(f"pred/{idx}",   
+                                             p, self.global_step, 
+                                             sample_rate=self.hparams.sample_rate)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
+        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': lr_scheduler,
+            'monitor': 'val_loss'
+        }
 
     # add any model hyperparameters here
     @staticmethod

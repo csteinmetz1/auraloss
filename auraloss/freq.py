@@ -88,8 +88,8 @@ class STFTLoss(torch.nn.Module):
         bs,c,t = x.size()
         self.window = self.window.to(x.device)
         for x_ch, y_ch in zip(torch.chunk(x,c,dim=1), torch.chunk(y,c,dim=1)):
-            x_mag = stft(x_ch.squeeze(), self.fft_size, self.shift_size, self.win_length, self.window)
-            y_mag = stft(y_ch.squeeze(), self.fft_size, self.shift_size, self.win_length, self.window)
+            x_mag = stft(x_ch.view(bs,t), self.fft_size, self.shift_size, self.win_length, self.window)
+            y_mag = stft(y_ch.view(bs,t), self.fft_size, self.shift_size, self.win_length, self.window)
             sc_loss += self.spectral_convergence_loss(x_mag, y_mag)
             mag_loss += self.log_stft_magnitude_loss(x_mag, y_mag)
 
