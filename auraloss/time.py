@@ -29,12 +29,14 @@ class LogCoshLoss(torch.nn.Module):
     
     See [Chen et al., 2019](https://openreview.net/forum?id=rkglvsC9Ym).
     """
-    def __init__(self, eps=1e-12):
-        """Initilize Log cosh loss module
+    def __init__(self, a=1.0, eps=1e-12):
+        """Initilize Log-cosh loss module
         Args:
+            a (float): Smoothness hyperparameter. Smaller is smoother. Default: 1.0
             eps (float): Small epsilon value for stablity. Default: 1e-12
         """
         super(LogCoshLoss, self).__init__()
+        self.a = a
         self.eps = eps
 
     def forward(self, input, target):
@@ -45,8 +47,29 @@ class LogCoshLoss(torch.nn.Module):
         Returns:
             Tensor: Log cosh loss value.
         """
-        return torch.mean(torch.log(torch.cosh(input - target + self.eps)))
+        return torch.mean( (1/self.a) * torch.log(torch.cosh(self.a * (input - target)) + self.eps))
 
+
+class SDRLoss(torch.nn.Module):
+    """Signal-to-distortion ratio loss module.
+
+    See [Vincent et al., 2006](https://ieeexplore.ieee.org/document/1643671)
+    """
+
+    def __init__(self):
+        """Initilize SDR loss module."""
+        super(SDRLoss, self).__init__()
+        raise NotImplementedError()
+
+    def forward(self, input, target):
+        """Calculate forward propagation.
+        Args:
+            input (Tensor): Predicted signal (B, #channels, #samples).
+            target (Tensor): Groundtruth signal (B, #channels, #samples).
+        Returns:
+            Tensor: SDR loss value.
+        """
+        return None
 
 class SISDRLoss(torch.nn.Module):
     """Scale-invariant signal-to-distortion ratio loss module.
@@ -55,8 +78,9 @@ class SISDRLoss(torch.nn.Module):
     """
 
     def __init__(self):
-        """Initilize spectral convergence loss module."""
+        """Initilize SI-SDR loss module."""
         super(SISDRLoss, self).__init__()
+        raise NotImplementedError()
 
     def forward(self, input, target):
         """Calculate forward propagation.
