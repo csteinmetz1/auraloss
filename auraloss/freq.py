@@ -151,16 +151,18 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
         min_hop_size (int): Largest hop size as porportion of window size.
         window (str): Window function type.
         randomize_rate (int): Number of forwards before STFTs are randomized. 
-    
-    See [Yamamoto et al., 2019](https://arxiv.org/abs/1910.11480)
     """
     def __init__(self,
                  resolutions  = 3,
-                 min_fft_size = 32,
+                 min_fft_size = 16,
                  max_fft_size = 16384,
                  min_hop_size = 0.25,
                  max_hop_size = 1.0,
-                 window="hann_window",
+                 window=["hann_window", 
+                         "bartlett_window", 
+                         "blackman_window", 
+                         "hamming_window", 
+                         "kaiser_window"],
                  randomize_rate = 1):
         super(RandomResolutionSTFTLoss, self).__init__()
         self.resolutions = resolutions
@@ -184,22 +186,28 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
             window_length = int(frame_size * np.random.choice([1.0, 0.5, 0.25]))
             self.stft_losses += [STFTLoss(frame_size, hop_size, window_length, self.window)]
 
-    def forward(self, x, y):
+    def forward(self, input, target):
         """Calculate forward propagation.
         Args:
-            x (Tensor): Predicted signal (B, C, T).
-            y (Tensor): Groundtruth signal (B, C, T).
+            input (Tensor): Predicted signal (B, C, T).
+            target (Tensor): Groundtruth signal (B, C, T).
         Returns:
             Tensor: Multi resolution spectral convergence loss value.
             Tensor: Multi resolution log STFT magnitude loss value.
         """
+
+        if input.size(-1) <= self.max_fft_size:
+            raise ValueError(f"Input length ({input.size(-1)}) must be larger than largest FFT size ({self.max_fft_size}).") 
+        elif target.size(-1) <= self.max_fft_size
+            raise ValueError(f"Target length ({target.size(-1)}) must be larger than largest FFT size ({self.max_fft_size}).") 
+
         if self.nforwards % self.randomize_rate == 0:
             self.randomize_losses()
 
         sc_loss = 0.0
         mag_loss = 0.0
         for f in self.stft_losses:
-            sc_l, mag_l = f(x, y)
+            sc_l, mag_l = f(input, target)
             sc_loss += sc_l
             mag_loss += mag_l
         sc_loss /= len(self.stft_losses)
@@ -209,13 +217,14 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
 
         return sc_loss, mag_loss
 
-class SumAndDiffLoss(torch.nn.Module):
+class SumAndDifferenceSTFTLoss(torch.nn.Module):
     """Sum and difference stereo balance loss module.
     
     See [Steinmetz et al., 2020](https://arxiv.org/abs/2010.10291)
     """
     def __init__(self):
         super(SumAndDiffLoss, self).__init__()
+        raise NotImplementedError()
 
     def forward(input, target):
-        pass
+        return None
