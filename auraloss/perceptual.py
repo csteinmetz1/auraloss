@@ -4,6 +4,40 @@ import scipy.signal
 
 from .plotting import compare_filters
 
+class SumAndDifference(torch.nn.Module):
+    """ Sum and difference signal extraction module."""
+    def __init__(self):
+        """Initialize sum and difference extraction module."""
+        super(SumAndDifference, self).__init__()
+
+    def forward(self, input, target):
+       """Calculate forward propagation.
+        Args:
+            input (Tensor): Predicted signal (B, #channels, #samples).
+            target (Tensor): Groundtruth signal (B, #channels, #samples).
+        Returns:
+            Tensor: Input sum signal.
+            Tensor: Input difference signal.
+            Tensor: Target sum signal.
+            Tensor: Target difference signal.
+        """    
+        assert(input.size(1) == target.size(1) == 2) # inputs must be stereo 
+        input_sum = self.sum(input)
+        input_diff = self.diff(input)
+        target_sum = self.sum(target)
+        target_diff = self.diff(target)
+
+        return input_sum, input_diff, target_sum, target_diff
+    
+    @staticmethod
+    def sum(self, x):
+        return x[:,0,:] + x[:,1,:]
+
+    @staticmethod
+    def diff(self, x):
+        return x[:,0,:] - x[:,1,:]
+
+
 class FIRFilter(torch.nn.Module):
     """FIR pre-emphasis filtering module.
 
