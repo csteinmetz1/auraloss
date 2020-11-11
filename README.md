@@ -47,7 +47,7 @@ We categorize the loss functions as either time-domain or frequency-domain appro
     </tr>
     <tr>
         <td>Log hyperbolic cosine (Log-cosh)</td>
-        <td><code>auraloss.time.Logcosh()</code></td>
+        <td><code>auraloss.time.LogCoshLoss()</code></td>
         <td><a href=https://openreview.net/forum?id=rkglvsC9Ym>Chen et al., 2019</a></td>
     </tr>
     <tr>

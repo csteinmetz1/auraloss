@@ -74,6 +74,9 @@ for loss_fn in losses:
     trainer = pl.Trainer.from_argparse_args(args)
     print(trainer.default_root_dir)
 
+    # set the seed
+    pl.seed_everything(42)
+
     dict_args = vars(args)
     dict_args["nparams"] = 2
     dict_args["train_loss"] = loss_fn

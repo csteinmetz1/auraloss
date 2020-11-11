@@ -158,7 +158,7 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
                  max_fft_size = 16384,
                  min_hop_size = 0.25,
                  max_hop_size = 1.0,
-                 window=["hann_window", 
+                 windows=["hann_window", 
                          "bartlett_window", 
                          "blackman_window", 
                          "hamming_window", 
@@ -170,7 +170,7 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
         self.max_fft_size = max_fft_size
         self.min_hop_size = min_hop_size
         self.max_hop_size = max_hop_size
-        self.window = window
+        self.windows = windows
         self.randomize_rate = randomize_rate
 
         self.nforwards = 0
@@ -184,7 +184,8 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
             frame_size = 2 ** np.random.randint(np.log2(self.min_fft_size), np.log2(self.max_fft_size))
             hop_size = int(frame_size * (self.min_hop_size + (np.random.rand() * (self.max_hop_size-self.min_hop_size))))
             window_length = int(frame_size * np.random.choice([1.0, 0.5, 0.25]))
-            self.stft_losses += [STFTLoss(frame_size, hop_size, window_length, self.window)]
+            window = np.random.choice(self.windows)
+            self.stft_losses += [STFTLoss(frame_size, hop_size, window_length, window)]
 
     def forward(self, input, target):
         """Calculate forward propagation.
@@ -198,7 +199,7 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
 
         if input.size(-1) <= self.max_fft_size:
             raise ValueError(f"Input length ({input.size(-1)}) must be larger than largest FFT size ({self.max_fft_size}).") 
-        elif target.size(-1) <= self.max_fft_size
+        elif target.size(-1) <= self.max_fft_size:
             raise ValueError(f"Target length ({target.size(-1)}) must be larger than largest FFT size ({self.max_fft_size}).") 
 
         if self.nforwards % self.randomize_rate == 0:

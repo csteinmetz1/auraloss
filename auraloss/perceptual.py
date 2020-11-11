@@ -11,7 +11,7 @@ class SumAndDifference(torch.nn.Module):
         super(SumAndDifference, self).__init__()
 
     def forward(self, input, target):
-       """Calculate forward propagation.
+        """Calculate forward propagation.
         Args:
             input (Tensor): Predicted signal (B, #channels, #samples).
             target (Tensor): Groundtruth signal (B, #channels, #samples).
@@ -21,7 +21,8 @@ class SumAndDifference(torch.nn.Module):
             Tensor: Target sum signal.
             Tensor: Target difference signal.
         """    
-        assert(input.size(1) == target.size(1) == 2) # inputs must be stereo 
+        if not (input.size(1) == target.size(1) == 2):
+            raise ValueError("Input and target must be stereo.") # inputs must be stereo 
         input_sum = self.sum(input)
         input_diff = self.diff(input)
         target_sum = self.sum(target)
