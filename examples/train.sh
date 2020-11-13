@@ -1,6 +1,6 @@
 CUDA_VISIBLE_DEVICES=2 python examples/train_comp.py \
 --root_dir /import/c4dm-datasets/SignalTrain_LA2A_Dataset_1.1 \
---max_epochs 10 \
+--max_epochs 20 \
 --batch_size 128 \
 --sample_rate 44100 \
 --train_length 32768 \
