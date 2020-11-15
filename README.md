@@ -1,5 +1,5 @@
 # auraloss
-A collection of audio focused loss functions in PyTorch.
+A collection of audio-focused loss functions in PyTorch.
 
 ## Setup
 
@@ -25,6 +25,7 @@ loss = mrstft(input, target)
 # Loss functions
 
 We categorize the loss functions as either time-domain or frequency-domain approaches. 
+Additionally, we include perceptual transforms.
 
 <table>
     <tr>
@@ -56,7 +57,7 @@ We categorize the loss functions as either time-domain or frequency-domain appro
         <td><a href=https://ieeexplore.ieee.org/document/1643671>Vincent et al., 2006</a></td>
     </tr>
     <tr>
-        <td>Scale-invariant signal-to-distortion ratio (SI-SDR)</td>
+        <td>Scale-invariant signal-to-distortion <br>  ratio (SI-SDR)</td>
         <td><code>auraloss.time.SISDRLoss()</code></td>
         <td><a href=https://arxiv.org/abs/1811.02508>Le Roux et al., 2018</a></td>
     </tr>
