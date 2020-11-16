@@ -1,5 +1,5 @@
 # auraloss
-A collection of audio-focused loss functions in PyTorch.
+A collection of audio-focused loss functions in PyTorch. [[PDF](https://www.christiansteinmetz.com/s/DMRN15__auraloss__Audio_focused_loss_functions_in_PyTorch.pdf)]
 
 ## Setup
 
@@ -19,7 +19,6 @@ input = torch.rand(8,1,44100)
 target = torch.rand(8,1,44100)
 
 loss = mrstft(input, target)
-
 ```
 
 # Loss functions
@@ -87,7 +86,7 @@ Additionally, we include perceptual transforms.
     <tr>
         <td>Random-resolution STFT</td>
         <td><code>auraloss.freq.RandomResolutionSTFTLoss()</code></td>
-        <td><a href=></a>Steinmetz & Reiss, 2020</td>
+        <td><a href=https://www.christiansteinmetz.com/s/DMRN15__auraloss__Audio_focused_loss_functions_in_PyTorch.pdf>Steinmetz & Reiss, 2020</a></td>
     </tr>
     <tr>
         <td>Sum and difference STFT loss</td>
@@ -108,6 +107,21 @@ Additionally, we include perceptual transforms.
         <td><a href=https://arxiv.org/abs/1911.08922>Wright & Välimäki, 2019</a></td>
     </tr>
 </table>
+
+## Examples
+
+Currently we include an example using a set of the loss functions to train a TCN for modeling an analog dynamic range compressor. 
+For details please refer to the details in [`examples/compressor`](examples/compressor). 
+We provide pre-trained models, evaluation scripts to compute the metrics in the [paper](https://www.christiansteinmetz.com/s/DMRN15__auraloss__Audio_focused_loss_functions_in_PyTorch.pdf), as well as scripts to retrain models. 
+
+# Development
+
+Note that a few losses have yet to be implemented (SDR, SI-SDR), but they will be coming soon.
+Additionally, we currently have no tests, but those will also be coming soon, so use caution at the moment. 
+Future loss functions to be included will target neural network based perceptual losses, 
+which tend to be a bit more sophisticated than those we have included so far. 
+
+If you are interested in adding a loss function please make a pull request. 
 
 # Cite
 If you use this code in your work please consider citing us.
