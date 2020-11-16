@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 
+from .perceptual import SumAndDifference
+
 def stft(x, fft_size, hop_size, win_length, window):
     """Perform STFT and convert to magnitude spectrogram.
     Args:
@@ -219,13 +221,42 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
         return sc_loss, mag_loss
 
 class SumAndDifferenceSTFTLoss(torch.nn.Module):
-    """Sum and difference stereo balance loss module.
+    """Sum and difference sttereo STFT loss module.
     
     See [Steinmetz et al., 2020](https://arxiv.org/abs/2010.10291)
     """
-    def __init__(self):
-        super(SumAndDiffLoss, self).__init__()
-        raise NotImplementedError()
+    def __init__(self,
+                 fft_sizes=[1024, 2048, 512],
+                 hop_sizes=[120, 240, 50],
+                 win_lengths=[600, 1200, 240],
+                 window="hann_window"):
+        """Initialize sum and difference stereo STFT loss module.
+        Args:
+            fft_sizes (list): List of FFT sizes.
+            hop_sizes (list): List of hop sizes.
+            win_lengths (list): List of window lengths.
+            window (str): Window function type.
+        """
+        super(SumAndDifferenceSTFTLoss, self).__init__()
+        self.sd = SumAndDifference() 
+        self.mrstft = MultiResolutionSTFTLoss(fft_sizes, 
+                                              hop_sizes, 
+                                              win_lengths, 
+                                              window)
 
-    def forward(input, target):
-        return None
+    def forward(self, input, target):
+        """Calculate forward propagation.
+        Args:
+            input (Tensor): Predicted signal (B, C, T).
+            target (Tensor): Groundtruth signal (B, C, T).
+        Returns:
+            Tensor: Multi resolution sum signal loss value.
+            Tensor: Multi resolution difference signal loss value.
+        """
+        input_sum, input_diff = self.sd(input)
+        target_sum, target_diff = self.sd(target)
+
+        sum_loss = torch.stack(self.mrstft(input_sum, target_sum)).sum()
+        diff_loss = torch.stack(self.mrstft(input_diff, target_diff)).sum()
+
+        return sum_loss, diff_loss 

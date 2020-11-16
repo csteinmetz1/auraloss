@@ -10,32 +10,29 @@ class SumAndDifference(torch.nn.Module):
         """Initialize sum and difference extraction module."""
         super(SumAndDifference, self).__init__()
 
-    def forward(self, input, target):
+    def forward(self, x):
         """Calculate forward propagation.
-        Args:
-            input (Tensor): Predicted signal (B, #channels, #samples).
-            target (Tensor): Groundtruth signal (B, #channels, #samples).
-        Returns:
-            Tensor: Input sum signal.
-            Tensor: Input difference signal.
-            Tensor: Target sum signal.
-            Tensor: Target difference signal.
-        """    
-        if not (input.size(1) == target.size(1) == 2):
-            raise ValueError("Input and target must be stereo.") # inputs must be stereo 
-        input_sum = self.sum(input)
-        input_diff = self.diff(input)
-        target_sum = self.sum(target)
-        target_diff = self.diff(target)
 
-        return input_sum, input_diff, target_sum, target_diff
+        Args:
+            x (Tensor): Predicted signal (B, #channels, #samples).
+        Returns:
+            Tensor: Sum signal.
+            Tensor: Difference signal.
+        """    
+        if not (x.size(1) == 2): # inputs must be stereo 
+            raise ValueError(f"Input must be stereo: {x.size(1)} channel(s).") 
+
+        sum_sig = self.sum(x).unsqueeze(1)
+        diff_sig = self.diff(x).unsqueeze(1)
+
+        return sum_sig, diff_sig
     
     @staticmethod
-    def sum(self, x):
+    def sum(x):
         return x[:,0,:] + x[:,1,:]
 
     @staticmethod
-    def diff(self, x):
+    def diff(x):
         return x[:,0,:] - x[:,1,:]
 
 
