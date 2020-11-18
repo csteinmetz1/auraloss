@@ -296,19 +296,24 @@ class TCNModel(pl.LightningModule):
                                              sample_rate=self.hparams.sample_rate)
 
             if self.hparams.save_dir is not None:
-                model_save_dir = os.path.join(self.hparams.save_dir, self.hparams.train_loss)
-                if not os.path.isdir(model_save_dir):
-                    os.makedirs(model_save_dir)
-                torchaudio.save(os.path.join(model_save_dir, 
-                                f"{idx}-input-{int(prm[0]):1d}-{prm[1]:0.2f}.wav"), 
-                                torch.tensor(i).view(1,-1).float(),
-                                sample_rate=self.hparams.sample_rate)
-                torchaudio.save(os.path.join(model_save_dir, 
-                                f"{idx}-target-{int(prm[0]):1d}-{prm[1]:0.2f}.wav"), 
-                                torch.tensor(t).view(1,-1).float(),
-                                sample_rate=self.hparams.sample_rate)
-                torchaudio.save(os.path.join(model_save_dir, 
-                                f"{idx}-pred-{int(prm[0]):1d}-{prm[1]:0.2f}.wav"), 
+                if not os.path.isdir(self.hparams.save_dir):
+                    os.makedirs(self.hparams.save_dir)
+
+                input_filename = os.path.join(self.hparams.save_dir, f"{idx}-input-{int(prm[0]):1d}-{prm[1]:0.2f}.wav")
+                target_filename = os.path.join(self.hparams.save_dir, f"{idx}-target-{int(prm[0]):1d}-{prm[1]:0.2f}.wav")
+
+                if not os.path.isfile(input_filename):
+                    torchaudio.save(input_filename, 
+                                    torch.tensor(i).view(1,-1).float(),
+                                    sample_rate=self.hparams.sample_rate)
+
+                if not os.path.isfile(target_filename):
+                    torchaudio.save(target_filename,
+                                    torch.tensor(t).view(1,-1).float(),
+                                    sample_rate=self.hparams.sample_rate)
+
+                torchaudio.save(os.path.join(self.hparams.save_dir, 
+                                f"{idx}-pred-{self.hparams.train_loss}-{int(prm[0]):1d}-{prm[1]:0.2f}.wav"), 
                                 torch.tensor(p).view(1,-1).float(),
                                 sample_rate=self.hparams.sample_rate)
 
