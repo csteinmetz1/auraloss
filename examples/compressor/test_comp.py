@@ -16,7 +16,6 @@ parser.add_argument('--root_dir', type=str, default='./data')
 parser.add_argument('--preload', type=bool, default=False)
 parser.add_argument('--sample_rate', type=int, default=44100)
 parser.add_argument('--logdir', type=str, default='./')
-parser.add_argument('--shuffle', type=bool, default=False)
 parser.add_argument('--eval_subset', type=str, default='val')
 parser.add_argument('--eval_length', type=int, default=262144)
 parser.add_argument('--batch_size', type=int, default=8)
@@ -38,7 +37,7 @@ test_dataset = SignalTrainLA2ADataset(args.root_dir,
                                       length=args.eval_length)
 
 test_dataloader = torch.utils.data.DataLoader(test_dataset, 
-                                               shuffle=args.shuffle,
+                                               shuffle=False,
                                                batch_size=args.batch_size,
                                                num_workers=args.num_workers)
 
@@ -64,6 +63,9 @@ for loss_model in losses:
         map_location="cuda:0"
     )
 
+    model.hparams.save_dir = args.save_dir
+    model.hparams.num_examples = args.num_examples
+
     # init trainer with whatever options
     trainer = pl.Trainer.from_argparse_args(args)
 
@@ -77,5 +79,5 @@ for loss_model in losses:
     results[loss_model] = res
 
 # save final metrics to disk
-with open(os.path.join("examples", "comp-metrics.json"), "w") as fp:
+with open(os.path.join("examples", "compressor", "comp-metrics.json"), "w") as fp:
     json.dump(results, fp, indent=True)

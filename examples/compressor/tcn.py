@@ -1,4 +1,6 @@
+import os
 import torch
+import torchaudio
 import numpy as np
 import torchsummary
 import pytorch_lightning as pl
@@ -111,6 +113,7 @@ class TCNModel(pl.LightningModule):
                  stack_size=10,
                  depthwise=False,
                  num_examples=4,
+                 save_dir=None,
                  **kwargs):
         super(TCNModel, self).__init__()
 
@@ -274,7 +277,7 @@ class TCNModel(pl.LightningModule):
         rand_indices = np.random.choice(example_indices,
                                         replace=False,
                                         size=np.min([len(outputs["input"]), self.hparams.num_examples]))
-        
+
         for idx, rand_idx in enumerate(list(rand_indices)):
             i = outputs["input"][rand_idx].squeeze()
             t = outputs["target"][rand_idx].squeeze()
@@ -292,11 +295,28 @@ class TCNModel(pl.LightningModule):
                                              p, self.global_step, 
                                              sample_rate=self.hparams.sample_rate)
 
+            if self.hparams.save_dir is not None:
+                model_save_dir = os.path.join(self.hparams.save_dir, self.hparams.train_loss)
+                if not os.path.isdir(model_save_dir):
+                    os.makedirs(model_save_dir)
+                torchaudio.save(os.path.join(model_save_dir, 
+                                f"{idx}-input-{int(prm[0]):1d}-{prm[1]:0.2f}.wav"), 
+                                torch.tensor(i).view(1,-1).float(),
+                                sample_rate=self.hparams.sample_rate)
+                torchaudio.save(os.path.join(model_save_dir, 
+                                f"{idx}-target-{int(prm[0]):1d}-{prm[1]:0.2f}.wav"), 
+                                torch.tensor(t).view(1,-1).float(),
+                                sample_rate=self.hparams.sample_rate)
+                torchaudio.save(os.path.join(model_save_dir, 
+                                f"{idx}-pred-{int(prm[0]):1d}-{prm[1]:0.2f}.wav"), 
+                                torch.tensor(p).view(1,-1).float(),
+                                sample_rate=self.hparams.sample_rate)
+
     def test_step(self, batch, batch_idx):
         return self.validation_step(batch, batch_idx)
 
     def test_epoch_end(self, test_step_outputs):
-        return self.validation_step_end(test_step_outputs)
+        return self.validation_epoch_end(test_step_outputs)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
@@ -324,5 +344,8 @@ class TCNModel(pl.LightningModule):
         # --- training related ---
         parser.add_argument('--lr', type=float, default=1e-3)
         parser.add_argument('--train_loss', type=str, default="l1")
+        # --- vadliation related ---
+        parser.add_argument('--save_dir', type=str, default=None)
+        parser.add_argument('--num_examples', type=int, default=4)
 
         return parser
