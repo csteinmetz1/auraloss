@@ -73,14 +73,17 @@ class SDRLoss(torch.nn.Module):
 
 class SISDRLoss(torch.nn.Module):
     """Scale-invariant signal-to-distortion ratio loss module.
+
+    Args:
+        eps (float): Small epsilon value for stablity. Default: 1e-12
     
     See [Le Roux et al., 2018](https://arxiv.org/abs/1811.02508)
     """
 
-    def __init__(self):
+    def __init__(self, eps=1e-12):
         """Initilize SI-SDR loss module."""
         super(SISDRLoss, self).__init__()
-        raise NotImplementedError()
+        self.eps = eps
 
     def forward(self, input, target):
         """Calculate forward propagation.
@@ -90,4 +93,9 @@ class SISDRLoss(torch.nn.Module):
         Returns:
             Tensor: SI-SDR loss value.
         """
-        return None
+        bs,c,s = input.size()
+        alpha = (input * target).sum(-1) / (target ** 2).sum(-1)
+        res = input - (target * alpha.view(bs,c,1))
+
+        return 10 * torch.log10(((target**2).sum()/(res**2).sum().clamp(self.eps)))
+

@@ -34,6 +34,7 @@ args = parser.parse_args()
 # setup the dataloaders
 train_dataset = SignalTrainLA2ADataset(args.root_dir, 
                                 subset=args.train_subset,
+                                half=True if args.precision == 16 else False,
                                 preload=args.preload,
                                 length=args.train_length)
 
@@ -44,6 +45,7 @@ train_dataloader = torch.utils.data.DataLoader(train_dataset,
 
 val_dataset = SignalTrainLA2ADataset(args.root_dir, 
                                 preload=args.preload,
+                                half=True if args.precision == 16 else False,
                                 subset=args.val_subset,
                                 length=args.eval_length)
 
@@ -60,7 +62,10 @@ else:
     version = 0
 
 # the losses we will test
-losses = ["l1", "logcosh", "esr+dc", "stft", "mrstft", "rrstft"]
+if args.train_loss is None:
+    losses = ["l1", "logcosh", "esr+dc", "stft", "mrstft", "rrstft"]
+else:
+    losses = [args.train_loss]
 
 for loss_fn in losses:
 
