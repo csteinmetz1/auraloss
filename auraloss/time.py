@@ -85,7 +85,7 @@ class SISDRLoss(torch.nn.Module):
     def __init__(self, zero_mean=True, eps=1e-8):
         """Initilize SI-SDR loss module."""
         super(SISDRLoss, self).__init__()
-        self.zero_mean = True
+        self.zero_mean = zero_mean
         self.eps = eps
 
     def forward(self, input, target):
@@ -99,8 +99,8 @@ class SISDRLoss(torch.nn.Module):
         bs,c,s = input.size()
 
         if self.zero_mean:
-            input_mean = torch.mean(input, dim=1, keepdim=True)
-            target_mean = torch.mean(target, dim=1, keepdim=True)
+            input_mean = torch.mean(input, dim=-1, keepdim=True)
+            target_mean = torch.mean(target, dim=-1, keepdim=True)
             input = input - input_mean
             target - target - target_mean
 
@@ -108,6 +108,6 @@ class SISDRLoss(torch.nn.Module):
         target = (target * alpha.view(bs,c,1))
         res = input - target
 
-        sisdr = 10 * torch.log10(((target**2).sum(-1)/(res**2).sum(-1).clamp(self.eps))).mean()
+        sisdr = 10 * torch.log10(((target**2).sum(-1)/(res**2).sum(-1) + self.eps)).mean()
         return -sisdr
 
