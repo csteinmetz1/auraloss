@@ -75,14 +75,17 @@ class SISDRLoss(torch.nn.Module):
     """Scale-invariant signal-to-distortion ratio loss module.
 
     Args:
-        eps (float): Small epsilon value for stablity. Default: 1e-12
+        eps (float): Small epsilon value for stablity. Default: 1e-8
     
+    Note that this returns the negative of the SI-SDR loss. 
+
     See [Le Roux et al., 2018](https://arxiv.org/abs/1811.02508)
     """
 
-    def __init__(self, eps=1e-12):
+    def __init__(self, zero_mean=True, eps=1e-8):
         """Initilize SI-SDR loss module."""
         super(SISDRLoss, self).__init__()
+        self.zero_mean = True
         self.eps = eps
 
     def forward(self, input, target):
@@ -91,11 +94,20 @@ class SISDRLoss(torch.nn.Module):
             input (Tensor): Predicted signal (B, #channels, #samples).
             target (Tensor): Groundtruth signal (B, #channels, #samples).
         Returns:
-            Tensor: SI-SDR loss value.
+            Tensor: Negative SI-SDR loss value.
         """
         bs,c,s = input.size()
-        alpha = (input * target).sum(-1) / (target ** 2).sum(-1)
-        res = input - (target * alpha.view(bs,c,1))
 
-        return 10 * torch.log10(((target**2).sum()/(res**2).sum().clamp(self.eps)))
+        if self.zero_mean:
+            input_mean = torch.mean(input, dim=1, keepdim=True)
+            target_mean = torch.mean(target, dim=1, keepdim=True)
+            input = input - input_mean
+            target - target - target_mean
+
+        alpha = (input * target).sum(-1) / ((target ** 2).sum(-1) + self.eps)
+        target = (target * alpha.view(bs,c,1))
+        res = input - target
+
+        sisdr = 10 * torch.log10(((target**2).sum(-1)/(res**2).sum(-1).clamp(self.eps))).mean()
+        return -sisdr
 
