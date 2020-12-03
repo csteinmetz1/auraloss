@@ -124,6 +124,7 @@ class TCNModel(pl.LightningModule):
         self.esr     = auraloss.time.ESRLoss()
         self.dc      = auraloss.time.DCLoss()
         self.logcosh = auraloss.time.LogCoshLoss()
+        self.sisdr   = auraloss.time.SISDRLoss()
         self.stft    = auraloss.freq.STFTLoss()
         self.mrstft  = auraloss.freq.MultiResolutionSTFTLoss()
         self.rrstft  = auraloss.freq.RandomResolutionSTFTLoss()
@@ -196,6 +197,8 @@ class TCNModel(pl.LightningModule):
             loss = self.esr(pred, target) + self.dc(pred, target)
         elif self.hparams.train_loss == "logcosh":
             loss = self.logcosh(pred, target)
+        elif self.hparams.train_loss == "sisdr":
+            loss = self.sisdr(pred, target)
         elif self.hparams.train_loss == "stft":
             loss = torch.stack(self.stft(pred, target),dim=0).sum()
         elif self.hparams.train_loss == "mrstft":
@@ -229,14 +232,16 @@ class TCNModel(pl.LightningModule):
         esr_loss     = self.esr(pred, target_crop)
         dc_loss      = self.dc(pred, target_crop)
         logcosh_loss = self.logcosh(pred, target_crop)
+        sisdr_loss   = self.sisdr(pred, target_crop)
         stft_loss    = torch.stack(self.stft(pred, target_crop),dim=0).sum()
         mrstft_loss  = torch.stack(self.mrstft(pred, target_crop),dim=0).sum()
         rrstft_loss  = torch.stack(self.rrstft(pred, target_crop),dim=0).sum()
-
+        
         aggregate_loss = l1_loss + \
                          esr_loss + \
                          dc_loss + \
                          logcosh_loss + \
+                         sisdr_loss + \
                          mrstft_loss + \
                          stft_loss + \
                          rrstft_loss
@@ -246,6 +251,7 @@ class TCNModel(pl.LightningModule):
         self.log('val_loss/ESR', esr_loss)
         self.log('val_loss/DC', dc_loss)
         self.log('val_loss/LogCosh', logcosh_loss)
+        self.log('val_loss/SI-SDR', sisdr_loss)
         self.log('val_loss/STFT', stft_loss)
         self.log('val_loss/MRSTFT', mrstft_loss)
         self.log('val_loss/RRSTFT', rrstft_loss)

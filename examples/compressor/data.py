@@ -76,8 +76,8 @@ class SignalTrainLA2ADataset(torch.utils.data.Dataset):
                 self.examples.append({"idx": idx, 
                                       "target_file" : tfile, 
                                       "input_file" : ifile, 
-                                      "input_audio" : input[:,offset:end],
-                                      "target_audio" : target[:,offset:end],
+                                      "input_audio" : input[:,offset:end] if input is not None else None,
+                                      "target_audio" : target[:,offset:end] if input is not None else None,
                                       "params" : params, 
                                       "offset": offset, 
                                       "frames" : num_frames})
