@@ -51,13 +51,18 @@ Additionally, we include perceptual transforms.
         <td><a href=https://openreview.net/forum?id=rkglvsC9Ym>Chen et al., 2019</a></td>
     </tr>
     <tr>
-        <td>Signal-to-distortion ratio (SDR)</td>
-        <td><code>auraloss.time.SDRLoss()</code></td>
-        <td><a href=https://ieeexplore.ieee.org/document/1643671>Vincent et al., 2006</a></td>
+        <td>Signal-to-noise ratio (SNR)</td>
+        <td><code>auraloss.time.SNRLoss()</code></td>
+        <td><a href=https://arxiv.org/abs/1811.02508>Le Roux et al., 2018</a></td>
     </tr>
     <tr>
         <td>Scale-invariant signal-to-distortion <br>  ratio (SI-SDR)</td>
         <td><code>auraloss.time.SISDRLoss()</code></td>
+        <td><a href=https://arxiv.org/abs/1811.02508>Le Roux et al., 2018</a></td>
+    </tr>
+    <tr>
+        <td>Scale-dependent signal-to-distortion <br>  ratio (SI-SDR)</td>
+        <td><code>auraloss.time.SDSDRLoss()</code></td>
         <td><a href=https://arxiv.org/abs/1811.02508>Le Roux et al., 2018</a></td>
     </tr>
     <tr>
