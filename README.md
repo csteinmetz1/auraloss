@@ -61,7 +61,7 @@ Additionally, we include perceptual transforms.
         <td><a href=https://arxiv.org/abs/1811.02508>Le Roux et al., 2018</a></td>
     </tr>
     <tr>
-        <td>Scale-dependent signal-to-distortion <br>  ratio (SI-SDR)</td>
+        <td>Scale-dependent signal-to-distortion <br>  ratio (SD-SDR)</td>
         <td><code>auraloss.time.SDSDRLoss()</code></td>
         <td><a href=https://arxiv.org/abs/1811.02508>Le Roux et al., 2018</a></td>
     </tr>
@@ -82,6 +82,11 @@ Additionally, we include perceptual transforms.
         <td>Aggregate STFT</td>
         <td><code>auraloss.freq.STFTLoss()</code></td>
         <td><a href=https://arxiv.org/abs/1808.06719>Arik et al., 2018</a></td>
+    </tr>
+    <tr>
+        <td>Aggregate Mel-scaled STFT</td>
+        <td><code>auraloss.freq.MelSTFTLoss()</code></td>
+        <td></td>
     </tr>
     <tr>
         <td>Multi-resolution STFT</td>
