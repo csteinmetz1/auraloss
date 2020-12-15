@@ -1,5 +1,14 @@
+<div  align="center">
+
 # auraloss
-A collection of audio-focused loss functions in PyTorch. [[PDF](https://www.christiansteinmetz.com/s/DMRN15__auraloss__Audio_focused_loss_functions_in_PyTorch.pdf)]
+
+<img width="200px" src="docs/auraloss-logo.svg">
+
+A collection of audio-focused loss functions in PyTorch. 
+
+[[PDF](https://www.christiansteinmetz.com/s/DMRN15__auraloss__Audio_focused_loss_functions_in_PyTorch.pdf)]
+
+</div>
 
 ## Setup
 
@@ -126,8 +135,7 @@ We provide pre-trained models, evaluation scripts to compute the metrics in the 
 
 # Development
 
-Note that a few losses have yet to be implemented (SDR, SI-SDR), but they will be coming soon.
-Additionally, we currently have no tests, but those will also be coming soon, so use caution at the moment. 
+We currently have no tests, but those will also be coming soon, so use caution at the moment. 
 Future loss functions to be included will target neural network based perceptual losses, 
 which tend to be a bit more sophisticated than those we have included so far. 
 
