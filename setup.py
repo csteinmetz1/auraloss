@@ -31,7 +31,7 @@ setup(
     python_requires=REQUIRES_PYTHON,
     url=URL,
     packages=['auraloss'],
-    install_requires=['torch', 'scipy', 'numpy', 'libroa', 'matplotlib'],
+    install_requires=['torch', 'scipy', 'numpy', 'librosa', 'matplotlib'],
     extras_require={"test": ['resampy']},
     include_package_data=True,
     license='Apache License 2.0',
