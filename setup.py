@@ -5,12 +5,12 @@ from pathlib import Path
 from setuptools import setup, find_packages
 
 NAME = 'auraloss'
-DESCRIPTION = 'Priority queue with a sane API'
+DESCRIPTION = 'Audio-focused loss functions in PyTorch'
 URL = 'https://github.com/csteinmetz1/auraloss'
 EMAIL = 'c.j.steinmetz@qmul.ac.uk'
 AUTHOR = 'Christian Steinmetz'
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 HERE = Path(__file__).parent
 
@@ -31,7 +31,7 @@ setup(
     python_requires=REQUIRES_PYTHON,
     url=URL,
     packages=['auraloss'],
-    install_requires=['torch', 'scipy', 'numpy', 'matplotlib'],
+    install_requires=['torch', 'scipy', 'numpy', 'libroa', 'matplotlib'],
     extras_require={"test": ['resampy']},
     include_package_data=True,
     license='Apache License 2.0',
