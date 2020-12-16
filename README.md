@@ -62,7 +62,7 @@ Additionally, we include perceptual transforms.
     <tr>
         <td>Signal-to-noise ratio (SNR)</td>
         <td><code>auraloss.time.SNRLoss()</code></td>
-        <td><a href=https://arxiv.org/abs/1811.02508>Le Roux et al., 2018</a></td>
+        <td></td>
     </tr>
     <tr>
         <td>Scale-invariant signal-to-distortion <br>  ratio (SI-SDR)</td>
@@ -100,7 +100,7 @@ Additionally, we include perceptual transforms.
     <tr>
         <td>Multi-resolution STFT</td>
         <td><code>auraloss.freq.MultiResolutionSTFTLoss()</code></td>
-        <td><a href=https://arxiv.org/abs/1910.11480>Yamamoto et al., 2019</a></td>
+        <td><a href=https://arxiv.org/abs/1910.11480>Yamamoto et al., 2019*</a></td>
     </tr>
     <tr>
         <td>Random-resolution STFT</td>
@@ -119,13 +119,16 @@ Additionally, we include perceptual transforms.
         <td>Sum and difference signal trasform</td>
         <td><code>auraloss.perceptual.SumAndDifference()</code></td>
         <td><a href=#></a></td>
-    <tr>
+    </tr>
     <tr>
         <td>FIR pre-emphasis filters</td>
         <td><code>auraloss.perceptual.FIRFilter()</code></td>
         <td><a href=https://arxiv.org/abs/1911.08922>Wright & Välimäki, 2019</a></td>
     </tr>
 </table>
+
+\* [Wang et al., 2019](https://arxiv.org/abs/1904.12088) also propose a multi-resolution spectral loss (that [Engel et al., 2020](https://arxiv.org/abs/2001.04643) follow), 
+but they do not include both the log magnitude (L1 distance) and spectral convergence terms, introduced in [Arik et al., 2018](https://arxiv.org/abs/1808.0671), and then extended for the multi-resolution case in [Yamamoto et al., 2019](https://arxiv.org/abs/1910.11480).
 
 ## Examples
 
