@@ -3,7 +3,7 @@ import numpy as np
 import librosa.filters
 from .utils import apply_reduction
 
-from .perceptual import SumAndDifference
+from .perceptual import SumAndDifference, FIRFilter
 
 class SpectralConvergenceLoss(torch.nn.Module):
     """Spectral convergence loss module.
@@ -43,12 +43,13 @@ class STFTLoss(torch.nn.Module):
             Default: 'hann_window'
         w_sc (float, optional): Weight of the spectral convergence loss term. Default: 1.0
         w_mag (float, optional): Weight of the log magnitude loss term. Default: 1.0
-        w_phs (float, optional): Weight of the spectral phase loss term. Default: 0.0
+        w_phs (float, optional): Weight of the spectral phase loss term (Currently not implemented.). Default: 0.0
         sample_rate (int, optional): Sample rate. Required when scale = 'mel'. Default: None
         scale (string, optional): Optional frequency scaling method, options include:
             ['mel', 'chroma'] 
             Default: None
         n_bins (int, optional): Number of scaling frequency bins. Default: None.
+        scale_invariance (bool, optional): Perform an optimal scaling of the target. Default: False
         eps (float, optional): Small epsilon value for stablity. Default: 1e-8
         output (str, optional): Format of the loss returned. 
             'loss' : Return only the raw, aggregate loss term.
@@ -77,6 +78,7 @@ class STFTLoss(torch.nn.Module):
                  sample_rate=None,
                  scale=None,
                  n_bins=None,
+                 scale_invariance=False,
                  eps=1e-8,
                  output="loss",
                  reduction="mean"):
@@ -91,6 +93,7 @@ class STFTLoss(torch.nn.Module):
         self.sample_rate = sample_rate
         self.scale = scale
         self.n_bins = n_bins
+        self.scale_invariance = scale_invariance
         self.eps = eps
         self.output = output
         self.reduction = reduction
@@ -125,13 +128,13 @@ class STFTLoss(torch.nn.Module):
                             self.win_length, 
                             self.window, 
                             return_complex=True)
-        x_mag = torch.abs(x_stft)
-        x_phs = torch.angle(x_stft)
-        return x_mag, x_phs
+        x_mag = torch.sqrt(torch.clamp((x_stft.real ** 2) + (x_stft.imag ** 2), min=self.eps))
+        #x_phs = torch.angle(x_stft) currently not implemented
+        return x_mag, None
 
     def forward(self, x, y):
         # compute the magnitude and phase spectra of input and target
-        #self.window = self.window.to(x.device)
+        self.window = self.window.to(x.device)
         x_mag, x_phs = self.stft(x.view(-1,x.size(-1)))
         y_mag, y_phs = self.stft(y.view(-1,y.size(-1)))
 
@@ -140,11 +143,15 @@ class STFTLoss(torch.nn.Module):
             x_mag = torch.matmul(self.fb, x_mag)
             y_mag = torch.matmul(self.fb, y_mag)
 
+        # normalize scales
+        if self.scale_invariance:
+            alpha = (x_mag * y_mag).sum([-2,-1]) / ((y_mag ** 2).sum([-2,-1]))
+            y_mag = y_mag * alpha.unsqueeze(-1)
+
         # compute loss terms
         sc_loss = self.spectralconv(x_mag, y_mag)
         mag_loss = self.logstft(x_mag, y_mag)
-        phs_loss = torch.nn.functional.l1_loss(x_phs, y_phs)
-        loss = (self.w_sc * sc_loss) + (self.w_mag * mag_loss) + (self.w_phs * phs_loss)
+        loss = (self.w_sc * sc_loss) + (self.w_mag * mag_loss)
         loss = apply_reduction(loss, reduction=self.reduction)
 
         if self.output == "loss":
@@ -218,7 +225,8 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
         scale (string, optional): Optional frequency scaling method, options include:
             ['mel', 'chroma'] 
             Default: None
-        n_mels (int, optional): Number of mel frequency bins. Default: 128.
+        n_bins (int, optional): Number of mel frequency bins. Default: 128.
+        scale_invariance (bool, optional): Perform an optimal scaling of the target. Default: False
     """
     def __init__(self,
                  fft_sizes=[1024, 2048, 512],
@@ -230,7 +238,8 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
                  w_phs=0.0,
                  sample_rate=None,
                  scale=None,
-                 n_mels=None):
+                 n_bins=None,
+                 scale_invariance=False):
         super(MultiResolutionSTFTLoss, self).__init__()
         assert len(fft_sizes) == len(hop_sizes) == len(win_lengths) # must define all
         self.stft_losses = torch.nn.ModuleList()
@@ -244,7 +253,8 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
                                           w_phs,
                                           sample_rate,
                                           scale,
-                                          n_mels)]
+                                          n_bins,
+                                          scale_invariance)]
 
     def forward(self, x, y):
         mrstft_loss = 0.0
