@@ -59,6 +59,11 @@ class FIRFilter(torch.nn.Module):
     def __init__(self, filter_type="hp", coef=0.85, fs=44100, ntaps=101, plot=False):
         """Initilize FIR pre-emphasis filtering module."""
         super(FIRFilter, self).__init__()
+        self.filter_type = filter_type
+        self.coef = coef
+        self.fs = fs
+        self.ntaps = ntaps
+        self.plot = plot
 
         if ntaps % 2 == 0:
             raise ValueError(f"ntaps must be odd (ntaps={ntaps}).")
@@ -109,10 +114,6 @@ class FIRFilter(torch.nn.Module):
         Returns:
             Tensor: Filtered signal.
         """
-        bs,c,s = input.size()
-
-        for i in range(c):
-            input[:,i:i+1,:] = self.fir(input[:,i:i+1,:])
-            target[:,i:i+1,:] = self.fir(target[:,i:i+1,:])
-
+        input = torch.nn.functional.conv1d(input, self.fir.weight.data, padding=self.ntaps//2)
+        target = torch.nn.functional.conv1d(target, self.fir.weight.data, padding=self.ntaps//2)
         return input, target
