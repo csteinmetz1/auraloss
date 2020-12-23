@@ -75,6 +75,8 @@ class STFTLoss(torch.nn.Module):
                  w_sc=1.0,
                  w_mag=1.0,
                  w_phs=0.0,
+                 w_real=0.0,
+                 w_imag=0.0,
                  sample_rate=None,
                  scale=None,
                  n_bins=None,
@@ -90,6 +92,8 @@ class STFTLoss(torch.nn.Module):
         self.w_sc = w_sc
         self.w_mag = w_mag
         self.w_phs = w_phs
+        self.w_real = w_real  
+        self.w_imag = w_imag
         self.sample_rate = sample_rate
         self.scale = scale
         self.n_bins = n_bins
@@ -130,13 +134,15 @@ class STFTLoss(torch.nn.Module):
                             return_complex=True)
         x_mag = torch.sqrt(torch.clamp((x_stft.real ** 2) + (x_stft.imag ** 2), min=self.eps))
         #x_phs = torch.angle(x_stft) currently not implemented
-        return x_mag, None
+        x_real = (x_stft.real).clamp(min=self.eps)
+        x_imag = (x_stft.imag).clamp(min=self.eps)
+        return x_mag, None, x_real, x_imag
 
     def forward(self, x, y):
         # compute the magnitude and phase spectra of input and target
         self.window = self.window.to(x.device)
-        x_mag, x_phs = self.stft(x.view(-1,x.size(-1)))
-        y_mag, y_phs = self.stft(y.view(-1,y.size(-1)))
+        x_mag, x_phs, x_real, x_imag = self.stft(x.view(-1,x.size(-1)))
+        y_mag, y_phs, y_real, y_imag = self.stft(y.view(-1,y.size(-1)))
 
         # apply relevant transforms
         if self.scale is not None:
@@ -152,6 +158,14 @@ class STFTLoss(torch.nn.Module):
         sc_loss = self.spectralconv(x_mag, y_mag)
         mag_loss = self.logstft(x_mag, y_mag)
         loss = (self.w_sc * sc_loss) + (self.w_mag * mag_loss)
+
+        if self.w_real > 0:
+            real_loss = self.logstft(x_real, y_real)
+            loss += self.w_real * real_loss
+        if self.w_imag > 0:
+            imag_loss = self.logstft(x_imag, y_imag)
+            loss += self.w_imag * imag_loss
+
         loss = apply_reduction(loss, reduction=self.reduction)
 
         if self.output == "loss":
@@ -178,6 +192,8 @@ class MelSTFTLoss(STFTLoss):
                                           w_sc,
                                           w_mag, 
                                           w_phs,
+                                          0.0,
+                                          0.0,
                                           sample_rate,
                                           "mel",
                                           n_mels)
@@ -201,6 +217,8 @@ class ChromaSTFTLoss(STFTLoss):
                                           w_sc,
                                           w_mag, 
                                           w_phs,
+                                          0.0,
+                                          0.0,
                                           sample_rate,
                                           "chroma",
                                           n_chroma)
@@ -236,6 +254,8 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
                  w_sc=1.0,
                  w_mag=1.0,
                  w_phs=0.0,
+                 w_real=0.0,
+                 w_imag=0.0,
                  sample_rate=None,
                  scale=None,
                  n_bins=None,
@@ -251,6 +271,8 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
                                           w_sc,
                                           w_mag,
                                           w_phs,
+                                          w_real,
+                                          w_imag,
                                           sample_rate,
                                           scale,
                                           n_bins,
@@ -288,6 +310,8 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
                  w_sc=1.0,
                  w_mag=1.0,
                  w_phs=0.0,
+                 w_real=0.0,
+                 w_imag=0.0,
                  sample_rate=None,
                  scale=None,
                  n_mels=None,
@@ -303,6 +327,8 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
         self.w_sc = w_sc
         self.w_mag = w_mag
         self.w_phs = w_phs
+        self.w_real = w_real
+        self.w_imag = w_imag
         self.sample_rate = sample_rate
         self.scale = scale
         self.n_mels = n_mels
@@ -325,6 +351,8 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
                                           self.w_sc,
                                           self.w_mag,
                                           self.w_phs,
+                                          self.w_real,
+                                          self.w_imag,
                                           self.sample_rate,
                                           self.scale,
                                           self.n_mels)]
