@@ -10,7 +10,7 @@ URL = 'https://github.com/csteinmetz1/auraloss'
 EMAIL = 'c.j.steinmetz@qmul.ac.uk'
 AUTHOR = 'Christian Steinmetz'
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = "0.1.4"
+VERSION = "0.1.5"
 
 HERE = Path(__file__).parent
 
