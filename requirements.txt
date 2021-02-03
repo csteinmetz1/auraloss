@@ -5,7 +5,7 @@ async-generator==1.10
 attrs==20.2.0
 auraloss==0.1.0
 backcall==0.2.0
-bleach==3.2.1
+bleach==3.3.0
 cachetools==4.1.1
 certifi==2020.6.20
 cffi==1.14.3
