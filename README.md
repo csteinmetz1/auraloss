@@ -13,7 +13,7 @@ A collection of audio-focused loss functions in PyTorch.
 ## Setup
 
 ```
-pip install git+https://github.com/csteinmetz1/auraloss
+pip install auraloss
 ```
 
 ## Usage
