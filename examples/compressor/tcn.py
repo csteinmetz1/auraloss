@@ -200,11 +200,11 @@ class TCNModel(pl.LightningModule):
         elif self.hparams.train_loss == "sisdr":
             loss = self.sisdr(pred, target)
         elif self.hparams.train_loss == "stft":
-            loss = torch.stack(self.stft(pred, target),dim=0).sum()
+            loss = self.stft(pred, target)
         elif self.hparams.train_loss == "mrstft":
-            loss = torch.stack(self.mrstft(pred, target),dim=0).sum()
+            loss = self.mrstft(pred, target)
         elif self.hparams.train_loss == "rrstft":
-            loss = torch.stack(self.rrstft(pred, target),dim=0).sum()
+            loss = self.rrstft(pred, target)
         else:
             raise NotImplementedError(f"Invalid loss fn: {self.hparams.train_loss}")
 
@@ -233,9 +233,9 @@ class TCNModel(pl.LightningModule):
         dc_loss      = self.dc(pred, target_crop)
         logcosh_loss = self.logcosh(pred, target_crop)
         sisdr_loss   = self.sisdr(pred, target_crop)
-        stft_loss    = torch.stack(self.stft(pred, target_crop),dim=0).sum()
-        mrstft_loss  = torch.stack(self.mrstft(pred, target_crop),dim=0).sum()
-        rrstft_loss  = torch.stack(self.rrstft(pred, target_crop),dim=0).sum()
+        stft_loss    = self.stft(pred, target_crop)
+        mrstft_loss  = self.mrstft(pred, target_crop)
+        rrstft_loss  = self.rrstft(pred, target_crop)
         
         aggregate_loss = l1_loss + \
                          esr_loss + \

@@ -3,7 +3,7 @@ appnope==0.1.0
 argon2-cffi==20.1.0
 async-generator==1.10
 attrs==20.2.0
-auraloss==0.1.0
+auraloss==0.1.7
 backcall==0.2.0
 bleach==3.2.1
 cachetools==4.1.1
