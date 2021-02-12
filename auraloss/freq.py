@@ -146,7 +146,7 @@ class STFTLoss(torch.nn.Module):
         # normalize scales
         if self.scale_invariance:
             alpha = (x_mag * y_mag).sum([-2,-1]) / ((y_mag ** 2).sum([-2,-1]))
-            y_mag = y_mag * alpha.unsqueeze(-1)
+            y_mag = y_mag * alpha.view(-1,1,1)
 
         # compute loss terms
         sc_loss = self.spectralconv(x_mag, y_mag)
