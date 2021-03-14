@@ -164,9 +164,18 @@ class STFTLoss(torch.nn.Module):
             y_mag = y_mag * alpha.unsqueeze(-1)
 
         # compute loss terms
-        sc_loss = self.spectralconv(x_mag, y_mag)
-        mag_loss = self.logstft(x_mag, y_mag)
-        lin_loss = self.linstft(x_mag, y_mag)
+        if self.w_sc:
+            sc_loss = self.spectralconv(x_mag, y_mag)
+        else:
+            sc_loss = 0.0
+        if self.w_mag:
+            mag_loss = self.logstft(x_mag, y_mag)
+        else:
+            mag_loss = 0.0
+        if self.w_lin:
+            lin_loss = self.linstft(x_mag, y_mag)
+        else:
+            lin_loss = 0.0
         loss = (self.w_sc * sc_loss) + (self.w_mag * mag_loss) + (self.w_lin * lin_loss)
         loss = apply_reduction(loss, reduction=self.reduction)
 
