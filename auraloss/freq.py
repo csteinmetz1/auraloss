@@ -17,28 +17,25 @@ class SpectralConvergenceLoss(torch.nn.Module):
         return torch.norm(y_mag - x_mag, p="fro") / torch.norm(y_mag, p="fro")
 
 
-class LogSTFTMagnitudeLoss(torch.nn.Module):
-    """Log STFT magnitude loss module.
+class STFTMagnitudeLoss(torch.nn.Module):
+    """STFT magnitude loss module.
     
-    See [Arik et al., 2018](https://arxiv.org/abs/1808.06719). 
+    See [Arik et al., 2018](https://arxiv.org/abs/1808.06719)
+    and [Engel et al., 2020](https://arxiv.org/abs/2001.04643v1)
+
+    Args:
+        log (bool, optional): Log-scale the STFT magnitudes,
+            or use linear scale. Default: True
     """
-    def __init__(self):
-        super(LogSTFTMagnitudeLoss, self).__init__()
+    def __init__(self, log=True):
+        super(STFTMagnitudeLoss, self).__init__()
+        self.log = log
 
     def forward(self, x_mag, y_mag):
-        return torch.nn.functional.l1_loss(torch.log(x_mag), torch.log(y_mag))
-
-class LinearSTFTMagnitudeLoss(torch.nn.Module):
-    """Linear STFT magnitude loss module.
-    
-    See [Engel et al., 2020](https://arxiv.org/abs/2001.04643v1)
-    """
-    def __init__(self):
-        super(LinearSTFTMagnitudeLoss, self).__init__()
-
-    def forward(self, x_mag, y_mag):
-        return torch.nn.functional.l1_loss(x_mag, y_mag)
-
+        if self.log:
+            return torch.nn.functional.l1_loss(torch.log(x_mag), torch.log(y_mag))
+        else:
+            return torch.nn.functional.l1_loss(x_mag, y_mag)
 
 class STFTLoss(torch.nn.Module):
     """STFT loss module.
@@ -113,8 +110,8 @@ class STFTLoss(torch.nn.Module):
         self.reduction = reduction
 
         self.spectralconv = SpectralConvergenceLoss()
-        self.logstft = LogSTFTMagnitudeLoss()
-        self.linstft = LinearSTFTMagnitudeLoss()
+        self.logstft = STFTMagnitudeLoss(log=True)
+        self.linstft = STFTMagnitudeLoss(log=False)
 
         # setup mel filterbank
         if self.scale == "mel":
