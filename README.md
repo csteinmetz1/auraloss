@@ -78,23 +78,13 @@ Additionally, we include perceptual transforms.
         <td colspan="3" align="center"><b>Frequency domain</b></td>
     </tr>
     <tr>
-        <td>Spectral convergence</td>
-        <td><code>auraloss.freq.SpectralConvergenceLoss()</code></td>
-        <td><a href=https://arxiv.org/abs/1808.06719>Arik et al., 2018</a></td>
-    </tr>
-    <tr>
-        <td>Log STFT magnitude </td>
-        <td><code>auraloss.freq.LogSTFTMagnitudeLoss()</code></td>
-        <td><a href=https://arxiv.org/abs/1808.06719>Arik et al., 2018</a></td>
-    </tr>
-    <tr>
         <td>Aggregate STFT</td>
         <td><code>auraloss.freq.STFTLoss()</code></td>
         <td><a href=https://arxiv.org/abs/1808.06719>Arik et al., 2018</a></td>
     </tr>
     <tr>
         <td>Aggregate Mel-scaled STFT</td>
-        <td><code>auraloss.freq.MelSTFTLoss()</code></td>
+        <td><code>auraloss.freq.MelSTFTLoss(sample_rate)</code></td>
         <td></td>
     </tr>
     <tr>
@@ -116,7 +106,7 @@ Additionally, we include perceptual transforms.
         <td colspan="3" align="center"><b>Perceptual transforms</b></td>
     </tr>
     <tr>
-        <td>Sum and difference signal trasform</td>
+        <td>Sum and difference signal transform</td>
         <td><code>auraloss.perceptual.SumAndDifference()</code></td>
         <td><a href=#></a></td>
     </tr>
@@ -135,6 +125,31 @@ but they do not include both the log magnitude (L1 distance) and spectral conver
 Currently we include an example using a set of the loss functions to train a TCN for modeling an analog dynamic range compressor. 
 For details please refer to the details in [`examples/compressor`](examples/compressor). 
 We provide pre-trained models, evaluation scripts to compute the metrics in the [paper](https://www.christiansteinmetz.com/s/DMRN15__auraloss__Audio_focused_loss_functions_in_PyTorch.pdf), as well as scripts to retrain models. 
+
+There are some more advanced things you can do based upon the `STFTLoss` class. 
+For example, you can compute both linear and log scaled STFT errors as in [Engel et al., 2020](https://arxiv.org/abs/2001.04643).
+In this case we do not include the spectral convergence term. 
+```python
+stft_loss = auraloss.freq.STFTLoss(w_log_mag=1.0, 
+                                   w_lin_mag=1.0, 
+                                   w_sc=0.0, )
+```
+
+There is also a Mel-scaled STFT loss, which has some special requirements. 
+This loss requires you set the sample rate as well as specify the correct device. 
+```python
+sample_rate = 44100
+melstft_loss = auraloss.freq.MelSTFTLoss(sample_rate, device="cuda")
+```
+
+You can also build a multi-resolution Mel-scaled STFT loss with 64 bins easily. 
+Make sure you pass the correct device where the tensors you are comparing will be. 
+```python
+mrmelstft_loss = auraloss.freq.MultiResolutionSTFTLoss(scale="mel", 
+                                                       n_bins=64,
+                                                       sample_rate=sample_rate,
+                                                       device="cuda")
+```
 
 # Development
 
