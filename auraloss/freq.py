@@ -140,8 +140,8 @@ class STFTLoss(torch.nn.Module):
             fb = librosa.filters.chroma(sample_rate, fft_size, n_chroma=n_bins)
             self.fb = torch.tensor(fb).unsqueeze(0)
 
-        if device is not None: # move to device
-            self.fb = self.fb.to(self.device)
+        if scale is not None and device is not None: 
+            self.fb = self.fb.to(self.device) # move filterbank to device
 
     def stft(self, x):
         """ Perform STFT.
@@ -269,7 +269,7 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
         scale (str, optional): Optional frequency scaling method, options include:
             ['mel', 'chroma'] 
             Default: None
-        n_bins (int, optional): Number of mel frequency bins. Default: 128.
+        n_bins (int, optional): Number of mel frequency bins. Required when scale = 'mel'. Default: None.
         scale_invariance (bool, optional): Perform an optimal scaling of the target. Default: False
     """
     def __init__(self,
