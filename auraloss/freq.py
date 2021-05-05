@@ -64,7 +64,7 @@ class STFTLoss(torch.nn.Module):
         w_sc (float, optional): Weight of the spectral convergence loss term. Default: 1.0
         w_log_mag (float, optional): Weight of the log magnitude loss term. Default: 1.0
         w_lin_mag_mag (float, optional): Weight of the linear magnitude loss term. Default: 0.0
-        w_phs (float, optional): Weight of the spectral phase loss term (Currently not implemented.). Default: 0.0
+        w_phs (float, optional): Weight of the spectral phase loss term. Default: 0.0
         sample_rate (int, optional): Sample rate. Required when scale = 'mel'. Default: None
         scale (str, optional): Optional frequency scaling method, options include:
             ['mel', 'chroma'] 
@@ -85,8 +85,8 @@ class STFTLoss(torch.nn.Module):
 
     Returns:
         loss: 
-            Aggreate loss term. Only returned if output='loss'.
-        loss, sc_loss, mag_loss, phs_loss: 
+            Aggreate loss term. Only returned if output='loss'. By default.
+        loss, sc_mag_loss, log_mag_loss, lin_mag_loss, phs_loss: 
             Aggregate and intermediate loss terms. Only returned if output='full'.
     """
     def __init__(self, 
@@ -159,8 +159,8 @@ class STFTLoss(torch.nn.Module):
                             self.window, 
                             return_complex=True)
         x_mag = torch.sqrt(torch.clamp((x_stft.real ** 2) + (x_stft.imag ** 2), min=self.eps))
-        #x_phs = torch.angle(x_stft) currently not implemented
-        return x_mag, None
+        x_phs = torch.angle(x_stft)
+        return x_mag, x_phs
 
     def forward(self, x, y):
         # compute the magnitude and phase spectra of input and target
@@ -179,18 +179,23 @@ class STFTLoss(torch.nn.Module):
             y_mag = y_mag * alpha.unsqueeze(-1)
 
         # compute loss terms
-        sc_loss = self.spectralconv(x_mag, y_mag) if self.w_sc else 0.0
-        mag_loss = self.logstft(x_mag, y_mag) if self.w_log_mag else 0.0
-        lin_loss = self.linstft(x_mag, y_mag) if self.w_lin_mag else 0.0
+        sc_mag_loss = self.spectralconv(x_mag, y_mag) if self.w_sc else 0.0
+        log_mag_loss = self.logstft(x_mag, y_mag) if self.w_log_mag else 0.0
+        lin_mag_loss = self.linstft(x_mag, y_mag) if self.w_lin_mag else 0.0
+        phs_loss = torch.nn.functional.mse_loss(x_phs, y_phs) if self.w_phs else 0.0
 
         # combine loss terms
-        loss = (self.w_sc * sc_loss) + (self.w_log_mag * mag_loss) + (self.w_lin_mag * lin_loss)
+        loss = (self.w_sc * sc_mag_loss) + \
+               (self.w_log_mag * log_mag_loss) + \
+               (self.w_lin_mag * lin_mag_loss) + \
+               (self.w_phs * phs_loss)
+
         loss = apply_reduction(loss, reduction=self.reduction)
 
         if self.output == "loss":
             return loss
         elif self.output == "full":
-            return loss, sc_loss, mag_loss, phs_loss
+            return loss, sc_mag_loss, log_mag_loss, lin_mag_loss, phs_loss
 
 
 class MelSTFTLoss(STFTLoss):
@@ -288,6 +293,10 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
                  **kwargs):
         super(MultiResolutionSTFTLoss, self).__init__()
         assert len(fft_sizes) == len(hop_sizes) == len(win_lengths) # must define all
+        self.fft_sizes = fft_sizes
+        self.hop_sizes = hop_sizes
+        self.win_lengths = win_lengths
+        
         self.stft_losses = torch.nn.ModuleList()
         for fs, ss, wl in zip(fft_sizes, hop_sizes, win_lengths):
             self.stft_losses += [STFTLoss(fs, 
@@ -306,10 +315,25 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
 
     def forward(self, x, y):
         mrstft_loss = 0.0
+        sc_mag_loss, log_mag_loss, lin_mag_loss, phs_loss = [], [], [], []
+        
         for f in self.stft_losses:
-            mrstft_loss += f(x, y)
+            if f.output == 'full': # extract just first term
+                tmp_loss = f(x, y)
+                mrstft_loss += tmp_loss[0]
+                sc_mag_loss.append(tmp_loss[1])
+                log_mag_loss.append(tmp_loss[2])
+                lin_mag_loss.append(tmp_loss[3])
+                phs_loss.append(tmp_loss[4])
+            else:
+                mrstft_loss += f(x, y)
+
         mrstft_loss /= len(self.stft_losses)
-        return mrstft_loss
+
+        if f.output == 'loss':
+            return mrstft_loss
+        else:
+            return mrstft_loss, sc_mag_loss, log_mag_loss, lin_mag_loss, phs_loss
 
 
 class RandomResolutionSTFTLoss(torch.nn.Module):
