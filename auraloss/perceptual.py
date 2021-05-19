@@ -1,11 +1,13 @@
-import torch 
+import torch
 import numpy as np
 import scipy.signal
 
 from .plotting import compare_filters
 
+
 class SumAndDifference(torch.nn.Module):
-    """ Sum and difference signal extraction module."""
+    """Sum and difference signal extraction module."""
+
     def __init__(self):
         """Initialize sum and difference extraction module."""
         super(SumAndDifference, self).__init__()
@@ -18,22 +20,22 @@ class SumAndDifference(torch.nn.Module):
         Returns:
             Tensor: Sum signal.
             Tensor: Difference signal.
-        """    
-        if not (x.size(1) == 2): # inputs must be stereo 
-            raise ValueError(f"Input must be stereo: {x.size(1)} channel(s).") 
+        """
+        if not (x.size(1) == 2):  # inputs must be stereo
+            raise ValueError(f"Input must be stereo: {x.size(1)} channel(s).")
 
         sum_sig = self.sum(x).unsqueeze(1)
         diff_sig = self.diff(x).unsqueeze(1)
 
         return sum_sig, diff_sig
-    
+
     @staticmethod
     def sum(x):
-        return x[:,0,:] + x[:,1,:]
+        return x[:, 0, :] + x[:, 1, :]
 
     @staticmethod
     def diff(x):
-        return x[:,0,:] - x[:,1,:]
+        return x[:, 0, :] - x[:, 1, :]
 
 
 class FIRFilter(torch.nn.Module):
@@ -46,13 +48,13 @@ class FIRFilter(torch.nn.Module):
         plot (bool): Plot the magnitude respond of the filter. Default: False
 
     Based upon the perceptual loss pre-empahsis filters proposed by
-    [Wright & Välimäki, 2019](https://arxiv.org/abs/1911.08922). 
+    [Wright & Välimäki, 2019](https://arxiv.org/abs/1911.08922).
 
     A-weighting filter - "aw"
     First-order highpass - "hp"
     Folded differentiator - "fd"
 
-    Note that the default coefficeint value of 0.85 is optimized for 
+    Note that the default coefficeint value of 0.85 is optimized for
     a sampling rate of 44.1 kHz, considering adjusting this value at differnt sampling rates.
     """
 
@@ -71,11 +73,11 @@ class FIRFilter(torch.nn.Module):
         if filter_type == "hp":
             self.fir = torch.nn.Conv1d(1, 1, kernel_size=3, bias=False, padding=1)
             self.fir.weight.requires_grad = False
-            self.fir.weight.data = torch.tensor([1, -coef, 0]).view(1,1,-1)
+            self.fir.weight.data = torch.tensor([1, -coef, 0]).view(1, 1, -1)
         elif filter_type == "fd":
             self.fir = torch.nn.Conv1d(1, 1, kernel_size=3, bias=False, padding=1)
             self.fir.weight.requires_grad = False
-            self.fir.weight.data = torch.tensor([1, 0, -coef]).view(1,1,-1)
+            self.fir.weight.data = torch.tensor([1, 0, -coef]).view(1, 1, -1)
         elif filter_type == "aw":
             # Definition of analog A-weighting filter according to IEC/CD 1672.
             f1 = 20.598997
@@ -84,13 +86,16 @@ class FIRFilter(torch.nn.Module):
             f4 = 12194.217
             A1000 = 1.9997
 
-            NUMs = [(2*np.pi * f4)**2 * (10**(A1000/20)), 0, 0, 0, 0]
-            DENs = np.polymul([1, 4*np.pi * f4, (2*np.pi * f4)**2],
-                              [1, 4*np.pi * f1, (2*np.pi * f1)**2])
-            DENs = np.polymul(np.polymul(DENs, [1, 2*np.pi * f3]),
-                                               [1, 2*np.pi * f2])
+            NUMs = [(2 * np.pi * f4) ** 2 * (10 ** (A1000 / 20)), 0, 0, 0, 0]
+            DENs = np.polymul(
+                [1, 4 * np.pi * f4, (2 * np.pi * f4) ** 2],
+                [1, 4 * np.pi * f1, (2 * np.pi * f1) ** 2],
+            )
+            DENs = np.polymul(
+                np.polymul(DENs, [1, 2 * np.pi * f3]), [1, 2 * np.pi * f2]
+            )
 
-            # convert analog filter to digital filter 
+            # convert analog filter to digital filter
             b, a = scipy.signal.bilinear(NUMs, DENs, fs=fs)
 
             # compute the digital filter frequency response
@@ -100,11 +105,14 @@ class FIRFilter(torch.nn.Module):
             taps = scipy.signal.firls(ntaps, w_iir, abs(h_iir), fs=fs)
 
             # now implement this digital FIR filter as a Conv1d layer
-            self.fir = torch.nn.Conv1d(1, 1, kernel_size=ntaps, bias=False, padding=ntaps//2)
+            self.fir = torch.nn.Conv1d(
+                1, 1, kernel_size=ntaps, bias=False, padding=ntaps // 2
+            )
             self.fir.weight.requires_grad = False
-            self.fir.weight.data = torch.tensor(taps.astype('float32')).view(1,1,-1)
+            self.fir.weight.data = torch.tensor(taps.astype("float32")).view(1, 1, -1)
 
-            if plot: compare_filters(b, a, taps, fs=fs)
+            if plot:
+                compare_filters(b, a, taps, fs=fs)
 
     def forward(self, input, target):
         """Calculate forward propagation.
@@ -114,6 +122,10 @@ class FIRFilter(torch.nn.Module):
         Returns:
             Tensor: Filtered signal.
         """
-        input = torch.nn.functional.conv1d(input, self.fir.weight.data, padding=self.ntaps//2)
-        target = torch.nn.functional.conv1d(target, self.fir.weight.data, padding=self.ntaps//2)
+        input = torch.nn.functional.conv1d(
+            input, self.fir.weight.data, padding=self.ntaps // 2
+        )
+        target = torch.nn.functional.conv1d(
+            target, self.fir.weight.data, padding=self.ntaps // 2
+        )
         return input, target

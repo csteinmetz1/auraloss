@@ -1,4 +1,3 @@
-
 """Top-level module for auraloss"""
 
 # Import auraloss sub-modules
