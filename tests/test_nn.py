@@ -3,6 +3,7 @@ import auraloss
 
 from data import LibriMixDataset
 
+
 class CNN(torch.nn.Module):
     def __init__(self):
         super(CNN, self).__init__()
@@ -15,10 +16,12 @@ class CNN(torch.nn.Module):
             torch.nn.BatchNorm1d(16),
             torch.nn.ReLU(),
             torch.nn.Conv1d(16, 1, kernel_size=3, padding=1, bias=False),
-            torch.nn.Tanh())
+            torch.nn.Tanh(),
+        )
 
     def forward(self, x):
         return self.model(x)
+
 
 net = CNN()
 criterion = auraloss.time.LogCoshLoss()
@@ -48,8 +51,7 @@ for epoch in range(2):  # loop over the dataset multiple times
         # print statistics
         running_loss += loss.item()
 
-        print('[%d, %5d] loss: %.3e' %
-                (epoch + 1, bidx + 1, running_loss / 2000))
+        print("[%d, %5d] loss: %.3e" % (epoch + 1, bidx + 1, running_loss / 2000))
         running_loss = 0.0
 
-print('Finished Training')
+print("Finished Training")
