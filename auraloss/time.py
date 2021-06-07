@@ -196,3 +196,64 @@ class SDSDRLoss(torch.nn.Module):
         )
         losses = apply_reduction(losses, self.reduction)
         return -losses
+
+
+class MultiScaleDynamicLoss(torch.nn.Module):
+    """Mutli-scale dynamic time domain loss module.
+
+    See [Tian, et al., 2020](https://arxiv.org/abs/2011.12206)
+
+    "Multi-scale dynamic loss consists of three parts in four resolution scales:
+    loss_e, loss_p and loss_t which are designed to capture energy, fast convergence
+    and remove high-frequency metallic noise respectively."
+
+    Args:
+        frame_sizes (list): List of ints specifying the frame sizes of each scale in samples.
+        hop_sizes (list): List of ints specifying the hope sizes of each scale in samples.
+        eps (float, optional): Small epsilon value for stablity. Default: 1e-8
+        reduction (string, optional): Specifies the reduction to apply to the output:
+            'none': no reduction will be applied,
+            'mean': the sum of the output will be divided by the number of elements in the output,
+            'sum': the output will be summed. Default: 'mean'
+    Shape:
+        - input : :math:`(batch, nchs, ...)`.
+        - target: :math:`(batch, nchs, ...)`.
+    """
+
+    def __init__(
+        self,
+        frame_sizes=[1, 240, 480, 960],
+        hop_sizes=[1, 120, 240, 480],
+        eps=1e-8,
+        reduction="mean",
+    ):
+        super(MultiScaleDynamicLoss, self).__init__()
+        self.eps = eps
+        self.frame_sizes = frame_sizes
+        self.hop_sizes = hop_sizes
+        self.reduction = reduction
+
+    def energy_loss(self, input, target):
+        return torch.norm(target ** 2 - input ** 2)
+
+    def time_loss(self, input, target):
+        return torch.norm(target - input)
+
+    def phase_loss(self, input, target):
+        return torch.norm(torch.diff(target) - torch.diff(input))
+
+    def forward(self, input, target):
+
+        loss = 0
+
+        for frame_size, hop_size in zip(self.frame_sizes, self.hop_sizes):
+            input_frames = input.unfold(-1, frame_size, hop_size)
+            target_frames = target.unfold(-1, frame_size, hop_size)
+
+            loss_e = self.energy_loss(input_frames, target_frames)
+            loss_t = self.time_loss(input_frames, target_frames)
+            loss_p = self.phase_loss(input_frames, target_frames)
+
+            loss += loss_e + loss_t + loss_p
+
+        return loss
