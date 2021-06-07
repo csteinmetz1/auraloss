@@ -144,7 +144,7 @@ class SISDRLoss(torch.nn.Module):
             input = input - input_mean
             target = target - target_mean
 
-        alpha = (input * target).sum(-1) / ((target ** 2).sum(-1))
+        alpha = (input * target).sum(-1) / (((target ** 2).sum(-1)) + self.eps)
         target = target * alpha.unsqueeze(-1)
         res = input - target
 
@@ -187,7 +187,7 @@ class SDSDRLoss(torch.nn.Module):
             input = input - input_mean
             target = target - target_mean
 
-        alpha = (input * target).sum(-1) / ((target ** 2).sum(-1))
+        alpha = (input * target).sum(-1) / (((target ** 2).sum(-1)) + self.eps)
         scaled_target = target * alpha.unsqueeze(-1)
         res = input - target
 
