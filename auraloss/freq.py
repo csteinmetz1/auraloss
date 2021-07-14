@@ -3,8 +3,6 @@ import numpy as np
 import librosa.filters
 from .utils import apply_reduction
 
-from .perceptual import SumAndDifference, FIRFilter
-
 
 class SpectralConvergenceLoss(torch.nn.Module):
     """Spectral convergence loss module.
@@ -183,7 +181,7 @@ class STFTLoss(torch.nn.Module):
         # normalize scales
         if self.scale_invariance:
             alpha = (x_mag * y_mag).sum([-2, -1]) / ((y_mag ** 2).sum([-2, -1]))
-            y_mag = y_mag * alpha.unsqueeze(-1)
+            y_mag = y_mag * alpha.view(-1, 1, 1)
 
         # compute loss terms
         sc_mag_loss = self.spectralconv(x_mag, y_mag) if self.w_sc else 0.0
@@ -474,58 +472,3 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
         self.nforwards += 1
 
         return loss
-
-
-class SumAndDifferenceSTFTLoss(torch.nn.Module):
-    """Sum and difference sttereo STFT loss module.
-
-    See [Steinmetz et al., 2020](https://arxiv.org/abs/2010.10291)
-
-    Args:
-        fft_sizes (list, optional): List of FFT sizes.
-        hop_sizes (list, optional): List of hop sizes.
-        win_lengths (list, optional): List of window lengths.
-        window (str, optional): Window function type.
-        w_sum (float, optional): Weight of the sum loss component. Default: 1.0
-        w_diff (float, optional): Weight of the difference loss component. Default: 1.0
-        output (str, optional): Format of the loss returned.
-            'loss' : Return only the raw, aggregate loss term.
-            'full' : Return the raw loss, plus intermediate loss terms.
-            Default: 'loss'
-
-    Returns:
-        loss:
-            Aggreate loss term. Only returned if output='loss'.
-        loss, sum_loss, diff_loss:
-            Aggregate and intermediate loss terms. Only returned if output='full'.
-    """
-
-    def __init__(
-        self,
-        fft_sizes=[1024, 2048, 512],
-        hop_sizes=[120, 240, 50],
-        win_lengths=[600, 1200, 240],
-        window="hann_window",
-        w_sum=1.0,
-        w_diff=1.0,
-        output="loss",
-    ):
-        super(SumAndDifferenceSTFTLoss, self).__init__()
-        self.sd = SumAndDifference()
-        self.w_sum = 1.0
-        self.w_diff = 1.0
-        self.output = output
-        self.mrstft = MultiResolutionSTFTLoss(fft_sizes, hop_sizes, win_lengths, window)
-
-    def forward(self, input, target):
-        input_sum, input_diff = self.sd(input)
-        target_sum, target_diff = self.sd(target)
-
-        sum_loss = self.mrstft(input_sum, target_sum)
-        diff_loss = self.mrstft(input_diff, target_diff)
-        loss = ((self.w_sum * sum_loss) + (self.w_diff * diff_loss)) / 2
-
-        if self.output == "loss":
-            return loss
-        elif self.output == "full":
-            return loss, sum_loss, diff_loss
