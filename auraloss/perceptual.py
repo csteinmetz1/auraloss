@@ -2,7 +2,72 @@ import torch
 import numpy as np
 import scipy.signal
 
-from .plotting import compare_filters
+import auraloss.plotting
+import auraloss.utils
+import auraloss.freq
+
+
+class DelayInvariance(torch.nn.Module):
+    """Compute the optimal time alignment between input and target."""
+
+    def __init__(self):
+        super().__init__()
+        raise NotImplementedError()
+
+    def forward(self, input, target):
+        """Calculate forward propagation.
+
+        Args:
+            input (Tensor): Predicted signal (B, #channels, #samples).
+            target (Tensor): Groundtruth signal (B, #channels, #samples).
+        Returns:
+            target (Tensor): Shifted groundtruth signal (B, #channels, #samples).
+        """
+
+        # downmix channels to mono
+        mono_input = input.mean(dim=1)
+        mono_target = target.mean(dim=1)
+
+        # find the FFT size
+        n_fft = auraloss.utils.next_power_of_2(mono_input.size(-1))
+
+        X = torch.fft.rfft(mono_input, n=n_fft)
+        Y = torch.fft.rfft(mono_target, n=n_fft)
+
+        numerator = X * torch.conj(Y)
+        denomenator = torch.abs(numerator)
+        gcc = numerator / denomenator
+
+        # find the estimated time delay
+        tau = torch.argmax(gcc.abs())
+
+
+class PerceptualMelSTFTLoss(torch.nn.Module):
+    def __init__(self, sample_rate, **kwargs):
+        super().__init__()
+        self.mrstft = auraloss.freq.MultiResolutionSTFTLoss(
+            sample_rate=sample_rate,
+            scale="mel",
+            n_bins=64,
+            scale_invariance=True,
+            **kwargs,
+        )
+        self.a_weighting = FIRFilter("aw", fs=sample_rate)
+
+    def forward(self, input, target):
+
+        # apply FIR A-weighting filter
+        input, target = self.a_weighting(input.clone(), target.clone())
+
+        # zero mean
+        input_mean = torch.mean(input, dim=-1, keepdim=True)
+        target_mean = torch.mean(target, dim=-1, keepdim=True)
+        input = input - input_mean
+        target = target - target_mean
+
+        mrstft_loss = self.mrstft(input, target)
+
+        return mrstft_loss
 
 
 class SumAndDifference(torch.nn.Module):
@@ -36,6 +101,63 @@ class SumAndDifference(torch.nn.Module):
     @staticmethod
     def diff(x):
         return x[:, 0, :] - x[:, 1, :]
+
+
+class SumAndDifferenceSTFTLoss(torch.nn.Module):
+    """Sum and difference sttereo STFT loss module.
+
+    See [Steinmetz et al., 2020](https://arxiv.org/abs/2010.10291)
+
+    Args:
+        fft_sizes (list, optional): List of FFT sizes.
+        hop_sizes (list, optional): List of hop sizes.
+        win_lengths (list, optional): List of window lengths.
+        window (str, optional): Window function type.
+        w_sum (float, optional): Weight of the sum loss component. Default: 1.0
+        w_diff (float, optional): Weight of the difference loss component. Default: 1.0
+        output (str, optional): Format of the loss returned.
+            'loss' : Return only the raw, aggregate loss term.
+            'full' : Return the raw loss, plus intermediate loss terms.
+            Default: 'loss'
+
+    Returns:
+        loss:
+            Aggreate loss term. Only returned if output='loss'.
+        loss, sum_loss, diff_loss:
+            Aggregate and intermediate loss terms. Only returned if output='full'.
+    """
+
+    def __init__(
+        self,
+        fft_sizes=[1024, 2048, 512],
+        hop_sizes=[120, 240, 50],
+        win_lengths=[600, 1200, 240],
+        window="hann_window",
+        w_sum=1.0,
+        w_diff=1.0,
+        output="loss",
+    ):
+        super(SumAndDifferenceSTFTLoss, self).__init__()
+        self.sd = SumAndDifference()
+        self.w_sum = 1.0
+        self.w_diff = 1.0
+        self.output = output
+        self.mrstft = auraloss.freq.MultiResolutionSTFTLoss(
+            fft_sizes, hop_sizes, win_lengths, window
+        )
+
+    def forward(self, input, target):
+        input_sum, input_diff = self.sd(input)
+        target_sum, target_diff = self.sd(target)
+
+        sum_loss = self.mrstft(input_sum, target_sum)
+        diff_loss = self.mrstft(input_diff, target_diff)
+        loss = ((self.w_sum * sum_loss) + (self.w_diff * diff_loss)) / 2
+
+        if self.output == "loss":
+            return loss
+        elif self.output == "full":
+            return loss, sum_loss, diff_loss
 
 
 class FIRFilter(torch.nn.Module):
@@ -112,20 +234,38 @@ class FIRFilter(torch.nn.Module):
             self.fir.weight.data = torch.tensor(taps.astype("float32")).view(1, 1, -1)
 
             if plot:
-                compare_filters(b, a, taps, fs=fs)
+                auraloss.plotting.compare_filters(b, a, taps, fs=fs)
 
     def forward(self, input, target):
         """Calculate forward propagation.
+
         Args:
             input (Tensor): Predicted signal (B, #channels, #samples).
             target (Tensor): Groundtruth signal (B, #channels, #samples).
         Returns:
-            Tensor: Filtered signal.
+            input (Tensor): Filted predicted signal (B, #channels, #samples).
+            target (Tensor): Filted groundtruth signal (B, #channels, #samples).
         """
+
+        assert (
+            input.shape == target.shape
+        )  # check the shapes match for input and target
+
+        bs, c, s = input.shape
+
+        # since same filter is applied to all channels move channels onto batch dim
+        input = input.view(bs * c, 1, -1)
+        target = target.view(bs * c, 1, -1)
+
         input = torch.nn.functional.conv1d(
             input, self.fir.weight.data, padding=self.ntaps // 2
         )
         target = torch.nn.functional.conv1d(
             target, self.fir.weight.data, padding=self.ntaps // 2
         )
+
+        # move channels back to channel dim
+        input = input.view(bs, c, -1)
+        target = target.view(bs, c, -1)
+
         return input, target
