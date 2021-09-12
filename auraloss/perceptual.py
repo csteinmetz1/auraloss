@@ -2,8 +2,6 @@ import torch
 import numpy as np
 import scipy.signal
 
-from .plotting import compare_filters
-
 
 class SumAndDifference(torch.nn.Module):
     """Sum and difference signal extraction module."""
@@ -112,6 +110,7 @@ class FIRFilter(torch.nn.Module):
             self.fir.weight.data = torch.tensor(taps.astype("float32")).view(1, 1, -1)
 
             if plot:
+                from .plotting import compare_filters
                 compare_filters(b, a, taps, fs=fs)
 
     def forward(self, input, target):
