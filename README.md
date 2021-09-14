@@ -159,6 +159,10 @@ which tend to be a bit more sophisticated than those we have included so far.
 
 If you are interested in adding a loss function please make a pull request. 
 
+## Loss functions to be added
+- [Spectral Energy Distance](https://arxiv.org/abs/2008.01160)
+- [TFGAN Losses](https://arxiv.org/abs/2011.12206)
+
 # Cite
 If you use this code in your work please consider citing us.
 ```
