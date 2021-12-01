@@ -1,7 +1,6 @@
 import os
 import glob
 import torch
-import torchsummary
 import pytorch_lightning as pl
 from argparse import ArgumentParser
 

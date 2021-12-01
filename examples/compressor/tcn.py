@@ -2,7 +2,6 @@ import os
 import torch
 import torchaudio
 import numpy as np
-import torchsummary
 import pytorch_lightning as pl
 from argparse import ArgumentParser
 
