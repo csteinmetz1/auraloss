@@ -449,7 +449,6 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
                     self.sample_rate,
                     self.scale,
                     self.n_mels,
-                    **kwargs,
                 )
             ]
 
