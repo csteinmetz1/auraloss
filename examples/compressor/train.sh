@@ -1,4 +1,4 @@
-CUDA_VISIBLE_DEVICES=0 python train_comp.py \
+CUDA_VISIBLE_DEVICES=0 python examples/compressor/train_comp.py \
 --root_dir /path/to/SignalTrain_LA2A_Dataset_1.1 \
 --max_epochs 20 \
 --batch_size 128 \
