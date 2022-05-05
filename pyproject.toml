@@ -1,17 +1,9 @@
 [project]
 name = "auraloss"
-version = "0.2.1"
+version = "0.2.2"
 description = "Collection of audio-focused loss functions in PyTorch."
-authors = [
-    "Christian Steinmetz <c.j.steinmetz@qmul.ac.uk>"
-]
+authors = ["Christian Steinmetz <c.j.steinmetz@qmul.ac.uk>"]
 
 [build-system]
 # Minimum requirements for the build system to execute.
-requires = [
-    "torch", 
-    "scipy", 
-    "numpy", 
-    "librosa", 
-    "matplotlib"
-]
+requires = ["torch", "scipy", "numpy", "librosa", "matplotlib"]
