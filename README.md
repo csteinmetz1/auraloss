@@ -16,6 +16,12 @@ A collection of audio-focused loss functions in PyTorch.
 pip install auraloss
 ```
 
+If you want to use `MelSTFTLoss()` or `FIRFilter()` you will need to specify the extra install (librosa and scipy).
+
+```
+pip install auraloss[all]
+```
+
 ## Usage
 
 ```python

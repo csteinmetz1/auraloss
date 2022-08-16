@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-import scipy.signal
 
 
 class SumAndDifference(torch.nn.Module):
@@ -64,6 +63,8 @@ class FIRFilter(torch.nn.Module):
         self.fs = fs
         self.ntaps = ntaps
         self.plot = plot
+
+        import scipy.signal
 
         if ntaps % 2 == 0:
             raise ValueError(f"ntaps must be odd (ntaps={ntaps}).")
