@@ -32,7 +32,8 @@ setup(
     url=URL,
     packages=["auraloss"],
     install_requires=["torch", "scipy", "numpy", "librosa", "matplotlib"],
-    extras_require={"test": ["resampy", "torchsummary==1.5.1", "torchaudio==0.7.0"]},
+    #extras_require={"test": ["resampy", "torchsummary==1.5.1", "torchaudio==0.7.0"]},
+    extras_require={"test": ["resampy", "torchsummary==1.5.1", "torchaudio"]},
     include_package_data=True,
     license="Apache License 2.0",
     classifiers=[
