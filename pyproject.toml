@@ -6,7 +6,11 @@ authors = [
     { name = "Christian Steinmetz" },
     { email = "c.j.steinmetz@qmul.ac.uk" },
 ]
+dependencies = ["torch", "numpy"]
 
 [build-system]
 # Minimum requirements for the build system to execute.
-requires = ["torch", "scipy", "numpy", "librosa", "matplotlib"]
+requires = ["setuptools"]
+
+[project.optional-dependencies]
+all = ["matplotlib", "librosa", "scipy", "scipy"]
