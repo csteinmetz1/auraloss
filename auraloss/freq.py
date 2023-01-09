@@ -133,18 +133,22 @@ class STFTLoss(torch.nn.Module):
         # setup mel filterbank
         if scale is not None:
 
-            import librosa.filters
+            try:
+                import librosa.filters
+            except Exception as e:
+                print(e)
+                print("Try `pip install auraloss[all]`.")
 
             if self.scale == "mel":
                 assert sample_rate != None  # Must set sample rate to use mel scale
                 assert n_bins <= fft_size  # Must be more FFT bins than Mel bins
-                fb = librosa.filters.mel(sample_rate, fft_size, n_mels=n_bins)
+                fb = librosa.filters.mel(sr=sample_rate, n_fft=fft_size, n_mels=n_bins)
                 self.fb = torch.tensor(fb).unsqueeze(0)
 
             elif self.scale == "chroma":
                 assert sample_rate != None  # Must set sample rate to use chroma scale
                 assert n_bins <= fft_size  # Must be more FFT bins than chroma bins
-                fb = librosa.filters.chroma(sample_rate, fft_size, n_chroma=n_bins)
+                fb = librosa.filters.chroma(sr=sample_rate, n_fft=fft_size, n_chroma=n_bins)
                 self.fb = torch.tensor(fb).unsqueeze(0)
             else:
                 raise ValueError(f"Invalid scale: {self.scale}. Must be 'mel' or 'chroma'.")
