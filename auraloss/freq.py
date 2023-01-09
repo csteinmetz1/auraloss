@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-import librosa.filters
 from .utils import apply_reduction
 
 from .perceptual import SumAndDifference, FIRFilter
@@ -132,16 +131,23 @@ class STFTLoss(torch.nn.Module):
         self.linstft = STFTMagnitudeLoss(log=False, reduction=reduction)
 
         # setup mel filterbank
-        if self.scale == "mel":
-            assert sample_rate != None  # Must set sample rate to use mel scale
-            assert n_bins <= fft_size  # Must be more FFT bins than Mel bins
-            fb = librosa.filters.mel(sample_rate, fft_size, n_mels=n_bins)
-            self.fb = torch.tensor(fb).unsqueeze(0)
-        elif self.scale == "chroma":
-            assert sample_rate != None  # Must set sample rate to use chroma scale
-            assert n_bins <= fft_size  # Must be more FFT bins than chroma bins
-            fb = librosa.filters.chroma(sample_rate, fft_size, n_chroma=n_bins)
-            self.fb = torch.tensor(fb).unsqueeze(0)
+        if scale is not None:
+
+            import librosa.filters
+
+            if self.scale == "mel":
+                assert sample_rate != None  # Must set sample rate to use mel scale
+                assert n_bins <= fft_size  # Must be more FFT bins than Mel bins
+                fb = librosa.filters.mel(sample_rate, fft_size, n_mels=n_bins)
+                self.fb = torch.tensor(fb).unsqueeze(0)
+
+            elif self.scale == "chroma":
+                assert sample_rate != None  # Must set sample rate to use chroma scale
+                assert n_bins <= fft_size  # Must be more FFT bins than chroma bins
+                fb = librosa.filters.chroma(sample_rate, fft_size, n_chroma=n_bins)
+                self.fb = torch.tensor(fb).unsqueeze(0)
+            else:
+                raise ValueError(f"Invalid scale: {self.scale}. Must be 'mel' or 'chroma'.")
 
         if scale is not None and device is not None:
             self.fb = self.fb.to(self.device)  # move filterbank to device
