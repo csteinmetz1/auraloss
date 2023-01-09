@@ -10,7 +10,8 @@ dependencies = ["torch", "numpy"]
 
 [build-system]
 # Minimum requirements for the build system to execute.
-requires = ["setuptools"]
+requires = ["setuptools", "wheel", "attrs"]
+build-backend = "setuptools.build_meta"
 
 [project.optional-dependencies]
 all = ["matplotlib", "librosa", "scipy", "scipy"]
