@@ -1,7 +1,8 @@
 import torch
 import numpy as np
-from .utils import apply_reduction
+from typing import List
 
+from .utils import apply_reduction
 from .perceptual import SumAndDifference, FIRFilter
 
 
@@ -495,45 +496,80 @@ class SumAndDifferenceSTFTLoss(torch.nn.Module):
     See [Steinmetz et al., 2020](https://arxiv.org/abs/2010.10291)
 
     Args:
-        fft_sizes (list, optional): List of FFT sizes.
-        hop_sizes (list, optional): List of hop sizes.
-        win_lengths (list, optional): List of window lengths.
+        fft_sizes (List[int]): List of FFT sizes.
+        hop_sizes (List[int]): List of hop sizes.
+        win_lengths (List[int]): List of window lengths.
         window (str, optional): Window function type.
         w_sum (float, optional): Weight of the sum loss component. Default: 1.0
         w_diff (float, optional): Weight of the difference loss component. Default: 1.0
+        perceptual_weighting (bool, optional): Apply perceptual A-weighting (Sample rate must be supplied). Default: False
+        sample_rate (float, optional): Audio sample rate. Default: None
         output (str, optional): Format of the loss returned.
             'loss' : Return only the raw, aggregate loss term.
             'full' : Return the raw loss, plus intermediate loss terms.
             Default: 'loss'
-
-    Returns:
-        loss:
-            Aggreate loss term. Only returned if output='loss'.
-        loss, sum_loss, diff_loss:
-            Aggregate and intermediate loss terms. Only returned if output='full'.
     """
 
     def __init__(
         self,
-        fft_sizes=[1024, 2048, 512],
-        hop_sizes=[120, 240, 50],
-        win_lengths=[600, 1200, 240],
-        window="hann_window",
-        w_sum=1.0,
-        w_diff=1.0,
-        output="loss",
+        fft_sizes: List[int],
+        hop_sizes: List[int],
+        win_lengths: List[int],
+        window: str = "hann_window",
+        w_sum: float = 1.0,
+        w_diff: float = 1.0,
+        perceptual_weighting: bool = False,
+        sample_rate: float = None,
+        output: str = "loss",
     ):
         super(SumAndDifferenceSTFTLoss, self).__init__()
         self.sd = SumAndDifference()
         self.w_sum = w_sum
         self.w_diff = w_diff
+        self.perceptual_weighting = perceptual_weighting
+        self.sample_rate = sample_rate
         self.output = output
         self.mrstft = MultiResolutionSTFTLoss(fft_sizes, hop_sizes, win_lengths, window)
 
+        if self.perceptual_weighting:
+            if sample_rate is None:
+                raise ValueError(
+                    f"`sample_rate` must be supplied when `perceptual_weighting = True`."
+                )
+            self.prefilter = FIRFilter(filter_type="aw", fs=sample_rate)
+
     def forward(self, input, target):
+        """This loss function assumes batched input of stereo audio in the time domain.
+
+        Args:
+            input (torch.Tensor): Input tensor with shape (batch size, 2, seq_len).
+            target (torch.Tensor): Target tensor with shape (batch size, 2, seq_len).
+
+        Returns:
+            loss (torch.Tensor): Aggreate loss term. Only returned if output='loss'.
+            loss (torch.Tensor), sum_loss (torch.Tensor), diff_loss (torch.Tensor):
+                Aggregate and intermediate loss terms. Only returned if output='full'.
+        """
+        assert input.shape == target.shape  # must have same shape
+        bs, chs, seq_len = input.size()
+
+        if self.perceptual_weighting:  # apply optional A-weighting via FIR filter
+            # since FIRFilter only support mono audio we will move channels to batch dim
+            input = input.view(bs * chs, 1, -1)
+            target = target.view(bs * chs, 1, -1)
+
+            # now apply the filter to both
+            input, target = self.prefilter(input, target)
+
+            # now move the channels back
+            input = input.view(bs, chs, -1)
+            target = target.view(bs, chs, -1)
+
+        # compute sum and difference signals for both
         input_sum, input_diff = self.sd(input)
         target_sum, target_diff = self.sd(target)
 
+        # compute error in STFT domain
         sum_loss = self.mrstft(input_sum, target_sum)
         diff_loss = self.mrstft(input_diff, target_diff)
         loss = ((self.w_sum * sum_loss) + (self.w_diff * diff_loss)) / 2
