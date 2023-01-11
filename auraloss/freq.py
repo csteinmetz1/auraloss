@@ -148,10 +148,14 @@ class STFTLoss(torch.nn.Module):
             elif self.scale == "chroma":
                 assert sample_rate != None  # Must set sample rate to use chroma scale
                 assert n_bins <= fft_size  # Must be more FFT bins than chroma bins
-                fb = librosa.filters.chroma(sr=sample_rate, n_fft=fft_size, n_chroma=n_bins)
+                fb = librosa.filters.chroma(
+                    sr=sample_rate, n_fft=fft_size, n_chroma=n_bins
+                )
                 self.fb = torch.tensor(fb).unsqueeze(0)
             else:
-                raise ValueError(f"Invalid scale: {self.scale}. Must be 'mel' or 'chroma'.")
+                raise ValueError(
+                    f"Invalid scale: {self.scale}. Must be 'mel' or 'chroma'."
+                )
 
         if scale is not None and device is not None:
             self.fb = self.fb.to(self.device)  # move filterbank to device
@@ -174,7 +178,7 @@ class STFTLoss(torch.nn.Module):
             return_complex=True,
         )
         x_mag = torch.sqrt(
-            torch.clamp((x_stft.real ** 2) + (x_stft.imag ** 2), min=self.eps)
+            torch.clamp((x_stft.real**2) + (x_stft.imag**2), min=self.eps)
         )
         x_phs = torch.angle(x_stft)
         return x_mag, x_phs
@@ -192,7 +196,7 @@ class STFTLoss(torch.nn.Module):
 
         # normalize scales
         if self.scale_invariance:
-            alpha = (x_mag * y_mag).sum([-2, -1]) / ((y_mag ** 2).sum([-2, -1]))
+            alpha = (x_mag * y_mag).sum([-2, -1]) / ((y_mag**2).sum([-2, -1]))
             y_mag = y_mag * alpha.unsqueeze(-1)
 
         # compute loss terms
@@ -521,8 +525,8 @@ class SumAndDifferenceSTFTLoss(torch.nn.Module):
     ):
         super(SumAndDifferenceSTFTLoss, self).__init__()
         self.sd = SumAndDifference()
-        self.w_sum = 1.0
-        self.w_diff = 1.0
+        self.w_sum = w_sum
+        self.w_diff = w_diff
         self.output = output
         self.mrstft = MultiResolutionSTFTLoss(fft_sizes, hop_sizes, win_lengths, window)
 
