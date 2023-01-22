@@ -77,6 +77,23 @@ def test_perceptual_sum_and_difference():
     assert res is not None
 
 
+def test_perceptual_mel_sum_and_difference():
+    target = torch.rand(8, 2, 44100)
+    pred = torch.rand(8, 2, 44100)
+    loss_fn = auraloss.freq.SumAndDifferenceSTFTLoss(
+        fft_sizes=[1024, 2048, 8192],
+        hop_sizes=[256, 512, 2048],
+        win_lengths=[1024, 2048, 8192],
+        perceptual_weighting=True,
+        sample_rate=44100,
+        mel_stft=True,
+        n_mel_bins=128,
+    )
+
+    res = loss_fn(pred, target)
+    assert res is not None
+
+
 def test_melstft():
     target = torch.rand(8, 2, 44100)
     pred = torch.rand(8, 2, 44100)

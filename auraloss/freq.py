@@ -144,7 +144,7 @@ class STFTLoss(torch.nn.Module):
                 assert sample_rate != None  # Must set sample rate to use mel scale
                 assert n_bins <= fft_size  # Must be more FFT bins than Mel bins
                 fb = librosa.filters.mel(sr=sample_rate, n_fft=fft_size, n_mels=n_bins)
-                self.fb = torch.tensor(fb).unsqueeze(0)
+                fb = torch.tensor(fb).unsqueeze(0)
 
             elif self.scale == "chroma":
                 assert sample_rate != None  # Must set sample rate to use chroma scale
@@ -152,11 +152,13 @@ class STFTLoss(torch.nn.Module):
                 fb = librosa.filters.chroma(
                     sr=sample_rate, n_fft=fft_size, n_chroma=n_bins
                 )
-                self.fb = torch.tensor(fb).unsqueeze(0)
+
             else:
                 raise ValueError(
                     f"Invalid scale: {self.scale}. Must be 'mel' or 'chroma'."
                 )
+
+            self.register_buffer("fb", fb)
 
         if scale is not None and device is not None:
             self.fb = self.fb.to(self.device)  # move filterbank to device
@@ -503,6 +505,8 @@ class SumAndDifferenceSTFTLoss(torch.nn.Module):
         w_sum (float, optional): Weight of the sum loss component. Default: 1.0
         w_diff (float, optional): Weight of the difference loss component. Default: 1.0
         perceptual_weighting (bool, optional): Apply perceptual A-weighting (Sample rate must be supplied). Default: False
+        mel_stft (bool, optional): Use Multi-resoltuion mel spectrograms. Default: False
+        n_mel_bins (int, optional): Number of mel bins to use when mel_stft = True. Default: 128
         sample_rate (float, optional): Audio sample rate. Default: None
         output (str, optional): Format of the loss returned.
             'loss' : Return only the raw, aggregate loss term.
@@ -519,6 +523,8 @@ class SumAndDifferenceSTFTLoss(torch.nn.Module):
         w_sum: float = 1.0,
         w_diff: float = 1.0,
         perceptual_weighting: bool = False,
+        mel_stft: bool = False,
+        n_mel_bins: int = 128,
         sample_rate: float = None,
         output: str = "loss",
     ):
@@ -529,7 +535,15 @@ class SumAndDifferenceSTFTLoss(torch.nn.Module):
         self.perceptual_weighting = perceptual_weighting
         self.sample_rate = sample_rate
         self.output = output
-        self.mrstft = MultiResolutionSTFTLoss(fft_sizes, hop_sizes, win_lengths, window)
+        self.mrstft = MultiResolutionSTFTLoss(
+            fft_sizes,
+            hop_sizes,
+            win_lengths,
+            window,
+            scale="mel" if mel_stft else None,
+            n_bins=n_mel_bins,
+            sample_rate=sample_rate,
+        )
 
         if self.perceptual_weighting:
             if sample_rate is None:
