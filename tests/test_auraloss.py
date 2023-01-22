@@ -86,8 +86,8 @@ def test_perceptual_mel_sum_and_difference():
         win_lengths=[1024, 2048, 8192],
         perceptual_weighting=True,
         sample_rate=44100,
-        mel_stft=True,
-        n_mel_bins=128,
+        scale="mel",
+        n_bins=128,
     )
 
     res = loss_fn(pred, target)
@@ -120,6 +120,23 @@ def test_multires_mel():
         scale="mel",
         n_bins=64,
         sample_rate=sample_rate,
+    )
+    res = loss(pred, target)
+    assert res is not None
+
+
+def test_perceptual_multires_mel():
+    target = torch.rand(8, 2, 44100)
+    pred = torch.rand(8, 2, 44100)
+    sample_rate = 44100
+    loss = auraloss.freq.MultiResolutionSTFTLoss(
+        fft_sizes=[1024, 2048, 8192],
+        hop_sizes=[256, 512, 2048],
+        win_lengths=[1024, 2048, 8192],
+        scale="mel",
+        n_bins=128,
+        sample_rate=sample_rate,
+        perceptual_weighting=True,
     )
     res = loss(pred, target)
     assert res is not None
