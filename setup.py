@@ -32,7 +32,7 @@ setup(
     url=URL,
     packages=["auraloss"],
     install_requires=["torch", "numpy"],
-    extras_require={"test": ["resampy"], "all": ["matplotlib",  "librosa", "scipy"]},
+    extras_require={"test": ["resampy"], "all": ["matplotlib",  "librosa", "scipy", "kymatio @ git+https://github.com/kymatio/kymatio.git"]},
     include_package_data=True,
     license="Apache License 2.0",
     classifiers=[

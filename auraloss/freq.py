@@ -148,10 +148,14 @@ class STFTLoss(torch.nn.Module):
             elif self.scale == "chroma":
                 assert sample_rate != None  # Must set sample rate to use chroma scale
                 assert n_bins <= fft_size  # Must be more FFT bins than chroma bins
-                fb = librosa.filters.chroma(sr=sample_rate, n_fft=fft_size, n_chroma=n_bins)
+                fb = librosa.filters.chroma(
+                    sr=sample_rate, n_fft=fft_size, n_chroma=n_bins
+                )
                 self.fb = torch.tensor(fb).unsqueeze(0)
             else:
-                raise ValueError(f"Invalid scale: {self.scale}. Must be 'mel' or 'chroma'.")
+                raise ValueError(
+                    f"Invalid scale: {self.scale}. Must be 'mel' or 'chroma'."
+                )
 
         if scale is not None and device is not None:
             self.fb = self.fb.to(self.device)  # move filterbank to device
@@ -174,7 +178,7 @@ class STFTLoss(torch.nn.Module):
             return_complex=True,
         )
         x_mag = torch.sqrt(
-            torch.clamp((x_stft.real ** 2) + (x_stft.imag ** 2), min=self.eps)
+            torch.clamp((x_stft.real**2) + (x_stft.imag**2), min=self.eps)
         )
         x_phs = torch.angle(x_stft)
         return x_mag, x_phs
@@ -192,7 +196,7 @@ class STFTLoss(torch.nn.Module):
 
         # normalize scales
         if self.scale_invariance:
-            alpha = (x_mag * y_mag).sum([-2, -1]) / ((y_mag ** 2).sum([-2, -1]))
+            alpha = (x_mag * y_mag).sum([-2, -1]) / ((y_mag**2).sum([-2, -1]))
             y_mag = y_mag * alpha.unsqueeze(-1)
 
         # compute loss terms
@@ -538,3 +542,41 @@ class SumAndDifferenceSTFTLoss(torch.nn.Module):
             return loss
         elif self.output == "full":
             return loss, sum_loss, diff_loss
+
+
+class TimeFrequencyScatteringLoss(torch.nn.Module):
+    def __init__(
+        self,
+        seq_len: int,
+        Q=(8, 2),
+        J=12,
+        J_fr=3,
+        Q_fr=2,
+        F=None,
+        T=None,
+        dist: torch.nn.Module = torch.nn.MSELoss,
+        format="time",
+    ):
+        super().__init__()
+        try:
+            from kymatio.torch import TimeFrequencyScattering
+        except Exception as e:
+            print(e)
+            print("Try `pip install auraloss[all]`.")
+
+        self.tfs = TimeFrequencyScattering(
+            shape=seq_len,
+            Q=Q,
+            J=J,
+            J_fr=J_fr,
+            Q_fr=Q_fr,
+            T=T,
+            F=F,
+            format=format,
+        )
+
+        self.dist = dist()
+
+    def forward(self, input: torch.Tensor, target: torch.Tensor):
+        self.tfs.to(input.device)
+        return self.dist(self.tfs(input), self.tfs(target))

@@ -14,4 +14,4 @@ requires = ["setuptools", "wheel", "attrs"]
 build-backend = "setuptools.build_meta"
 
 [project.optional-dependencies]
-all = ["matplotlib", "librosa", "scipy", "scipy"]
+all = ["matplotlib", "librosa", "scipy", "scipy", "kymatio @ git+https://github.com/kymatio/kymatio.git"]
