@@ -548,15 +548,29 @@ class TimeFrequencyScatteringLoss(torch.nn.Module):
     def __init__(
         self,
         seq_len: int,
-        Q=(8, 2),
+        Q=(8, 1),
         J=12,
-        J_fr=3,
-        Q_fr=2,
+        J_fr=6,
+        Q_fr=1,
         F=None,
         T=None,
         dist: torch.nn.Module = torch.nn.MSELoss,
         format="time",
     ):
+        """
+
+        Args:
+            seq_len (int): Length of the final dimension of the input.
+            Q (tuple): Number of filters per octave at first and second-order.
+            Q_fr (int): Mumber of filters per octave in the frequency scattering filterbank.
+            J (int): Effects the averaging stride.
+            J_fr (int): ?
+            F (int): Frequency averaging.
+            T (int): Stride of the lowpass filter for averaging (Set to larger than 2**J).
+            dist (torch.nn.Module)
+            format (str):
+
+        """
         super().__init__()
         try:
             from kymatio.torch import TimeFrequencyScattering
@@ -579,4 +593,4 @@ class TimeFrequencyScatteringLoss(torch.nn.Module):
 
     def forward(self, input: torch.Tensor, target: torch.Tensor):
         self.tfs.to(input.device)
-        return self.dist(self.tfs(input), self.tfs(target))
+        return self.dist(self.tfs(input.contiguous()), self.tfs(target.contiguous()))
