@@ -550,7 +550,7 @@ class TimeFrequencyScatteringLoss(torch.nn.Module):
         seq_len: int,
         Q=(8, 1),
         J=12,
-        J_fr=6,
+        J_fr=3,
         Q_fr=1,
         F=None,
         T=None,
