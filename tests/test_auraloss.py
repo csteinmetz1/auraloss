@@ -108,7 +108,7 @@ def test_stft_l2():
         w_log_mag=0.0,
         w_lin_mag=1.0,
         w_phs=0.0,
-        distance="L2",
+        mag_distance="L2",
     )
     res = loss(pred, target)
 
@@ -116,6 +116,7 @@ def test_stft_l2():
     expected_loss = ((N // 2) ** 2) / (N // 2 + 1)
 
     torch.testing.assert_close(res, torch.tensor(expected_loss), rtol=1e-3, atol=1e-3)
+
 
 def test_multires_l2():
     N = 32
@@ -135,7 +136,7 @@ def test_multires_l2():
         w_log_mag=0.0,
         w_lin_mag=1.0,
         w_phs=0.0,
-        distance="L2",
+        mag_distance="L2",
     )
     res = loss(pred, target)
 

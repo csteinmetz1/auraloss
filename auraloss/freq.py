@@ -106,7 +106,7 @@ class STFTLoss(torch.nn.Module):
         eps=1e-8,
         output="loss",
         reduction="mean",
-        distance="L1",
+        mag_distance="L1",
         device=None,
     ):
         super(STFTLoss, self).__init__()
@@ -129,10 +129,10 @@ class STFTLoss(torch.nn.Module):
 
         self.spectralconv = SpectralConvergenceLoss()
         self.logstft = STFTMagnitudeLoss(
-            log=True, reduction=reduction, distance=distance
+            log=True, reduction=reduction, distance=mag_distance
         )
         self.linstft = STFTMagnitudeLoss(
-            log=False, reduction=reduction, distance=distance
+            log=False, reduction=reduction, distance=mag_distance
         )
 
         # setup mel filterbank
