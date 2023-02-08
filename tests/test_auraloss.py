@@ -1,3 +1,4 @@
+import math
 import os
 import torch
 import auraloss
@@ -87,3 +88,58 @@ def test_multires_mel():
     )
     res = loss(pred, target)
     assert res is not None
+
+
+def test_stft_l2():
+    N = 32
+    n = torch.arange(N)
+
+    f = N / 4
+    target = torch.cos(2 * math.pi * f * n / N)
+    target = target[None, None, :]
+    pred = torch.zeros_like(target)
+
+    loss = auraloss.freq.STFTLoss(
+        fft_size=N,
+        hop_size=N + 1,  # eliminate padding artefacts by enforcing only one hop
+        win_length=N,
+        window="ones",  # eliminate windowing artefacts
+        w_sc=0.0,
+        w_log_mag=0.0,
+        w_lin_mag=1.0,
+        w_phs=0.0,
+        mag_distance="L2",
+    )
+    res = loss(pred, target)
+
+    # MSE of energy in concentrated in single DFT bin
+    expected_loss = ((N // 2) ** 2) / (N // 2 + 1)
+
+    torch.testing.assert_close(res, torch.tensor(expected_loss), rtol=1e-3, atol=1e-3)
+
+
+def test_multires_l2():
+    N = 32
+    n = torch.arange(N)
+
+    f = N / 4
+    target = torch.cos(2 * math.pi * f * n / N)
+    target = target[None, None, :]
+    pred = torch.zeros_like(target)
+
+    loss = auraloss.freq.MultiResolutionSTFTLoss(
+        fft_sizes=[N],
+        hop_sizes=[N + 1],  # eliminate padding artefacts by enforcing only one hop
+        win_lengths=[N],
+        window="ones",  # eliminate windowing artefacts
+        w_sc=0.0,
+        w_log_mag=0.0,
+        w_lin_mag=1.0,
+        w_phs=0.0,
+        mag_distance="L2",
+    )
+    res = loss(pred, target)
+
+    expected_loss = ((N // 2) ** 2) / (N // 2 + 1)
+
+    torch.testing.assert_close(res, torch.tensor(expected_loss), rtol=1e-3, atol=1e-3)
