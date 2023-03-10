@@ -1,4 +1,6 @@
 import torch
+from torch import Tensor as T
+
 from .utils import apply_reduction
 
 
@@ -17,12 +19,15 @@ class ESRLoss(torch.nn.Module):
         - target: :math:`(batch, nchs, ...)`.
     """
 
-    def __init__(self, reduction="mean"):
-        super(ESRLoss, self).__init__()
+    def __init__(self, eps: float = 1e-8, reduction: str = "mean") -> None:
+        super().__init__()
+        self.eps = eps
         self.reduction = reduction
 
-    def forward(self, input, target):
-        losses = ((target - input).abs() ** 2).sum(-1) / (target.abs() ** 2).sum(-1)
+    def forward(self, input: T, target: T) -> T:
+        num = ((target - input) ** 2).sum(dim=-1)
+        denom = (target ** 2).sum(dim=-1) + self.eps
+        losses = num / denom
         losses = apply_reduction(losses, reduction=self.reduction)
         return losses
 
@@ -42,12 +47,15 @@ class DCLoss(torch.nn.Module):
         - target: :math:`(batch, nchs, ...)`.
     """
 
-    def __init__(self, reduction="mean"):
-        super(DCLoss, self).__init__()
+    def __init__(self, eps: float = 1e-8, reduction: str = "mean") -> None:
+        super().__init__()
+        self.eps = eps
         self.reduction = reduction
 
-    def forward(self, input, target):
-        losses = ((target - input).mean(-1) ** 2).abs() / (target.abs().mean(-1) ** 2)
+    def forward(self, input: T, target: T) -> T:
+        num = ((target - input) ** 2).mean(dim=-1)
+        denom = (target ** 2).mean(dim=-1) + self.eps
+        losses = num / denom
         losses = apply_reduction(losses, self.reduction)
         return losses
 

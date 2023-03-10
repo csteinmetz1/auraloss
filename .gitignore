@@ -136,3 +136,4 @@ lightning_logs/
 
 test-env/
 *.wav
+.idea/
