@@ -53,7 +53,7 @@ class DCLoss(torch.nn.Module):
         self.reduction = reduction
 
     def forward(self, input: T, target: T) -> T:
-        num = ((target - input) ** 2).mean(dim=-1)
+        num = (target - input).mean(dim=-1) ** 2
         denom = (target ** 2).mean(dim=-1) + self.eps
         losses = num / denom
         losses = apply_reduction(losses, self.reduction)
