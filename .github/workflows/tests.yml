@@ -1,4 +1,4 @@
-name: pyloudnorm
+name: pytest
 
 on: [push]
 

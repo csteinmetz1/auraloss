@@ -82,6 +82,7 @@ class STFTLoss(torch.nn.Module):
             'mean': the sum of the output will be divided by the number of elements in the output,
             'sum': the output will be summed.
             Default: 'mean'
+        mag_distance (str, optional): Distance function ["L1", "L2"] for the magnitude loss terms.
         device (str, optional): Place the filterbanks on specified device. Default: None
 
     Returns:
@@ -131,8 +132,12 @@ class STFTLoss(torch.nn.Module):
         self.device = device
 
         self.spectralconv = SpectralConvergenceLoss()
-        self.logstft = STFTMagnitudeLoss(log=True, reduction=reduction)
-        self.linstft = STFTMagnitudeLoss(log=False, reduction=reduction)
+        self.logstft = STFTMagnitudeLoss(
+            log=True, reduction=reduction, distance=mag_distance
+        )
+        self.linstft = STFTMagnitudeLoss(
+            log=False, reduction=reduction, distance=mag_distance
+        )
 
         # setup mel filterbank
         if scale is not None:
