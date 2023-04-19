@@ -1,7 +1,8 @@
 import torch
 import numpy as np
-from .utils import apply_reduction
+from typing import List, Any
 
+from .utils import apply_reduction
 from .perceptual import SumAndDifference, FIRFilter
 
 
@@ -69,6 +70,7 @@ class STFTLoss(torch.nn.Module):
             ['mel', 'chroma']
             Default: None
         n_bins (int, optional): Number of scaling frequency bins. Default: None.
+        perceptual_weighting (bool, optional): Apply perceptual A-weighting (Sample rate must be supplied). Default: False
         scale_invariance (bool, optional): Perform an optimal scaling of the target. Default: False
         eps (float, optional): Small epsilon value for stablity. Default: 1e-8
         output (str, optional): Format of the loss returned.
@@ -92,25 +94,26 @@ class STFTLoss(torch.nn.Module):
 
     def __init__(
         self,
-        fft_size=1024,
-        hop_size=256,
-        win_length=1024,
-        window="hann_window",
-        w_sc=1.0,
-        w_log_mag=1.0,
-        w_lin_mag=0.0,
-        w_phs=0.0,
-        sample_rate=None,
-        scale=None,
-        n_bins=None,
-        scale_invariance=False,
-        eps=1e-8,
-        output="loss",
-        reduction="mean",
-        mag_distance="L1",
-        device=None,
+        fft_size: int = 1024,
+        hop_size: int = 256,
+        win_length: int = 1024,
+        window: str = "hann_window",
+        w_sc: float = 1.0,
+        w_log_mag: float = 1.0,
+        w_lin_mag: float = 0.0,
+        w_phs: float = 0.0,
+        sample_rate: float = None,
+        scale: str = None,
+        n_bins: int = None,
+        perceptual_weighting: bool = False,
+        scale_invariance: bool = False,
+        eps: float = 1e-8,
+        output: str = "loss",
+        reduction: str = "mean",
+        mag_distance: str = "L1",
+        device: Any = None,
     ):
-        super(STFTLoss, self).__init__()
+        super().__init__()
         self.fft_size = fft_size
         self.hop_size = hop_size
         self.win_length = win_length
@@ -122,23 +125,28 @@ class STFTLoss(torch.nn.Module):
         self.sample_rate = sample_rate
         self.scale = scale
         self.n_bins = n_bins
+        self.perceptual_weighting = perceptual_weighting
         self.scale_invariance = scale_invariance
         self.eps = eps
         self.output = output
         self.reduction = reduction
+        self.mag_distance = mag_distance
         self.device = device
 
         self.spectralconv = SpectralConvergenceLoss()
         self.logstft = STFTMagnitudeLoss(
-            log=True, reduction=reduction, distance=mag_distance
+            log=True,
+            reduction=reduction,
+            distance=mag_distance,
         )
         self.linstft = STFTMagnitudeLoss(
-            log=False, reduction=reduction, distance=mag_distance
+            log=False,
+            reduction=reduction,
+            distance=mag_distance,
         )
 
         # setup mel filterbank
         if scale is not None:
-
             try:
                 import librosa.filters
             except Exception as e:
@@ -149,18 +157,31 @@ class STFTLoss(torch.nn.Module):
                 assert sample_rate != None  # Must set sample rate to use mel scale
                 assert n_bins <= fft_size  # Must be more FFT bins than Mel bins
                 fb = librosa.filters.mel(sr=sample_rate, n_fft=fft_size, n_mels=n_bins)
-                self.fb = torch.tensor(fb).unsqueeze(0)
+                fb = torch.tensor(fb).unsqueeze(0)
 
             elif self.scale == "chroma":
                 assert sample_rate != None  # Must set sample rate to use chroma scale
                 assert n_bins <= fft_size  # Must be more FFT bins than chroma bins
-                fb = librosa.filters.chroma(sr=sample_rate, n_fft=fft_size, n_chroma=n_bins)
-                self.fb = torch.tensor(fb).unsqueeze(0)
+                fb = librosa.filters.chroma(
+                    sr=sample_rate, n_fft=fft_size, n_chroma=n_bins
+                )
+
             else:
-                raise ValueError(f"Invalid scale: {self.scale}. Must be 'mel' or 'chroma'.")
+                raise ValueError(
+                    f"Invalid scale: {self.scale}. Must be 'mel' or 'chroma'."
+                )
+
+            self.register_buffer("fb", fb)
 
         if scale is not None and device is not None:
             self.fb = self.fb.to(self.device)  # move filterbank to device
+
+        if self.perceptual_weighting:
+            if sample_rate is None:
+                raise ValueError(
+                    f"`sample_rate` must be supplied when `perceptual_weighting = True`."
+                )
+            self.prefilter = FIRFilter(filter_type="aw", fs=sample_rate)
 
     def stft(self, x):
         """Perform STFT.
@@ -180,25 +201,41 @@ class STFTLoss(torch.nn.Module):
             return_complex=True,
         )
         x_mag = torch.sqrt(
-            torch.clamp((x_stft.real ** 2) + (x_stft.imag ** 2), min=self.eps)
+            torch.clamp((x_stft.real**2) + (x_stft.imag**2), min=self.eps)
         )
         x_phs = torch.angle(x_stft)
         return x_mag, x_phs
 
-    def forward(self, x, y):
+    def forward(self, input: torch.Tensor, target: torch.Tensor):
+        bs, chs, seq_len = input.size()
+
+        if self.perceptual_weighting:  # apply optional A-weighting via FIR filter
+            # since FIRFilter only support mono audio we will move channels to batch dim
+            input = input.view(bs * chs, 1, -1)
+            target = target.view(bs * chs, 1, -1)
+
+            # now apply the filter to both
+            self.prefilter.to(input.device)
+            input, target = self.prefilter(input, target)
+
+            # now move the channels back
+            input = input.view(bs, chs, -1)
+            target = target.view(bs, chs, -1)
+
         # compute the magnitude and phase spectra of input and target
-        self.window = self.window.to(x.device)
-        x_mag, x_phs = self.stft(x.view(-1, x.size(-1)))
-        y_mag, y_phs = self.stft(y.view(-1, y.size(-1)))
+        self.window = self.window.to(input.device)
+        x_mag, x_phs = self.stft(input.view(-1, input.size(-1)))
+        y_mag, y_phs = self.stft(target.view(-1, target.size(-1)))
 
         # apply relevant transforms
         if self.scale is not None:
+            self.fb = self.fb.to(input.device)
             x_mag = torch.matmul(self.fb, x_mag)
             y_mag = torch.matmul(self.fb, y_mag)
 
         # normalize scales
         if self.scale_invariance:
-            alpha = (x_mag * y_mag).sum([-2, -1]) / ((y_mag ** 2).sum([-2, -1]))
+            alpha = (x_mag * y_mag).sum([-2, -1]) / ((y_mag**2).sum([-2, -1]))
             y_mag = y_mag * alpha.unsqueeze(-1)
 
         # compute loss terms
@@ -315,21 +352,22 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
 
     def __init__(
         self,
-        fft_sizes=[1024, 2048, 512],
-        hop_sizes=[120, 240, 50],
-        win_lengths=[600, 1200, 240],
-        window="hann_window",
-        w_sc=1.0,
-        w_log_mag=1.0,
-        w_lin_mag=0.0,
-        w_phs=0.0,
-        sample_rate=None,
-        scale=None,
-        n_bins=None,
-        scale_invariance=False,
+        fft_sizes: List[int] = [1024, 2048, 512],
+        hop_sizes: List[int] = [120, 240, 50],
+        win_lengths: List[int] = [600, 1200, 240],
+        window: str = "hann_window",
+        w_sc: float = 1.0,
+        w_log_mag: float = 1.0,
+        w_lin_mag: float = 0.0,
+        w_phs: float = 0.0,
+        sample_rate: float = None,
+        scale: str = None,
+        n_bins: int = None,
+        perceptual_weighting: bool = False,
+        scale_invariance: bool = False,
         **kwargs,
     ):
-        super(MultiResolutionSTFTLoss, self).__init__()
+        super().__init__()
         assert len(fft_sizes) == len(hop_sizes) == len(win_lengths)  # must define all
         self.fft_sizes = fft_sizes
         self.hop_sizes = hop_sizes
@@ -350,6 +388,7 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
                     sample_rate,
                     scale,
                     n_bins,
+                    perceptual_weighting,
                     scale_invariance,
                     **kwargs,
                 )
@@ -417,7 +456,7 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
         randomize_rate=1,
         **kwargs,
     ):
-        super(RandomResolutionSTFTLoss, self).__init__()
+        super().__init__()
         self.resolutions = resolutions
         self.min_fft_size = min_fft_size
         self.max_fft_size = max_fft_size
@@ -497,45 +536,66 @@ class SumAndDifferenceSTFTLoss(torch.nn.Module):
     See [Steinmetz et al., 2020](https://arxiv.org/abs/2010.10291)
 
     Args:
-        fft_sizes (list, optional): List of FFT sizes.
-        hop_sizes (list, optional): List of hop sizes.
-        win_lengths (list, optional): List of window lengths.
+        fft_sizes (List[int]): List of FFT sizes.
+        hop_sizes (List[int]): List of hop sizes.
+        win_lengths (List[int]): List of window lengths.
         window (str, optional): Window function type.
         w_sum (float, optional): Weight of the sum loss component. Default: 1.0
         w_diff (float, optional): Weight of the difference loss component. Default: 1.0
+        perceptual_weighting (bool, optional): Apply perceptual A-weighting (Sample rate must be supplied). Default: False
+        mel_stft (bool, optional): Use Multi-resoltuion mel spectrograms. Default: False
+        n_mel_bins (int, optional): Number of mel bins to use when mel_stft = True. Default: 128
+        sample_rate (float, optional): Audio sample rate. Default: None
         output (str, optional): Format of the loss returned.
             'loss' : Return only the raw, aggregate loss term.
             'full' : Return the raw loss, plus intermediate loss terms.
             Default: 'loss'
-
-    Returns:
-        loss:
-            Aggreate loss term. Only returned if output='loss'.
-        loss, sum_loss, diff_loss:
-            Aggregate and intermediate loss terms. Only returned if output='full'.
     """
 
     def __init__(
         self,
-        fft_sizes=[1024, 2048, 512],
-        hop_sizes=[120, 240, 50],
-        win_lengths=[600, 1200, 240],
-        window="hann_window",
-        w_sum=1.0,
-        w_diff=1.0,
-        output="loss",
+        fft_sizes: List[int],
+        hop_sizes: List[int],
+        win_lengths: List[int],
+        window: str = "hann_window",
+        w_sum: float = 1.0,
+        w_diff: float = 1.0,
+        output: str = "loss",
+        **kwargs,
     ):
-        super(SumAndDifferenceSTFTLoss, self).__init__()
+        super().__init__()
         self.sd = SumAndDifference()
-        self.w_sum = 1.0
-        self.w_diff = 1.0
+        self.w_sum = w_sum
+        self.w_diff = w_diff
         self.output = output
-        self.mrstft = MultiResolutionSTFTLoss(fft_sizes, hop_sizes, win_lengths, window)
+        self.mrstft = MultiResolutionSTFTLoss(
+            fft_sizes,
+            hop_sizes,
+            win_lengths,
+            window,
+            **kwargs,
+        )
 
-    def forward(self, input, target):
+    def forward(self, input: torch.Tensor, target: torch.Tensor):
+        """This loss function assumes batched input of stereo audio in the time domain.
+
+        Args:
+            input (torch.Tensor): Input tensor with shape (batch size, 2, seq_len).
+            target (torch.Tensor): Target tensor with shape (batch size, 2, seq_len).
+
+        Returns:
+            loss (torch.Tensor): Aggreate loss term. Only returned if output='loss'.
+            loss (torch.Tensor), sum_loss (torch.Tensor), diff_loss (torch.Tensor):
+                Aggregate and intermediate loss terms. Only returned if output='full'.
+        """
+        assert input.shape == target.shape  # must have same shape
+        bs, chs, seq_len = input.size()
+
+        # compute sum and difference signals for both
         input_sum, input_diff = self.sd(input)
         target_sum, target_diff = self.sd(target)
 
+        # compute error in STFT domain
         sum_loss = self.mrstft(input_sum, target_sum)
         diff_loss = self.mrstft(input_diff, target_diff)
         loss = ((self.w_sum * sum_loss) + (self.w_diff * diff_loss)) / 2
