@@ -110,6 +110,7 @@ class STFTLoss(torch.nn.Module):
         eps: float = 1e-8,
         output: str = "loss",
         reduction: str = "mean",
+        mag_distance: str = "L1",
         device: Any = None,
     ):
         super().__init__()
@@ -129,19 +130,23 @@ class STFTLoss(torch.nn.Module):
         self.eps = eps
         self.output = output
         self.reduction = reduction
+        self.mag_distance = mag_distance
         self.device = device
 
         self.spectralconv = SpectralConvergenceLoss()
         self.logstft = STFTMagnitudeLoss(
-            log=True, reduction=reduction, distance=mag_distance
+            log=True,
+            reduction=reduction,
+            distance=mag_distance,
         )
         self.linstft = STFTMagnitudeLoss(
-            log=False, reduction=reduction, distance=mag_distance
+            log=False,
+            reduction=reduction,
+            distance=mag_distance,
         )
 
         # setup mel filterbank
         if scale is not None:
-
             try:
                 import librosa.filters
             except Exception as e:
@@ -362,7 +367,7 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
         scale_invariance: bool = False,
         **kwargs,
     ):
-        super(MultiResolutionSTFTLoss, self).__init__()
+        super().__init__()
         assert len(fft_sizes) == len(hop_sizes) == len(win_lengths)  # must define all
         self.fft_sizes = fft_sizes
         self.hop_sizes = hop_sizes
@@ -451,7 +456,7 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
         randomize_rate=1,
         **kwargs,
     ):
-        super(RandomResolutionSTFTLoss, self).__init__()
+        super().__init__()
         self.resolutions = resolutions
         self.min_fft_size = min_fft_size
         self.max_fft_size = max_fft_size
@@ -558,7 +563,7 @@ class SumAndDifferenceSTFTLoss(torch.nn.Module):
         output: str = "loss",
         **kwargs,
     ):
-        super(SumAndDifferenceSTFTLoss, self).__init__()
+        super().__init__()
         self.sd = SumAndDifference()
         self.w_sum = w_sum
         self.w_diff = w_diff
@@ -571,7 +576,7 @@ class SumAndDifferenceSTFTLoss(torch.nn.Module):
             **kwargs,
         )
 
-    def forward(self, input, target):
+    def forward(self, input: torch.Tensor, target: torch.Tensor):
         """This loss function assumes batched input of stereo audio in the time domain.
 
         Args:
