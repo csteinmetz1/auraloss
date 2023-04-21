@@ -1,6 +1,6 @@
 [project]
 name = "auraloss"
-version = "0.3.0"
+version = "0.4.0"
 description = "Collection of audio-focused loss functions in PyTorch."
 authors = [
     { name = "Christian Steinmetz" },
