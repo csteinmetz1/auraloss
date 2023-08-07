@@ -32,9 +32,21 @@ class STFTMagnitudeLoss(torch.nn.Module):
         reduction (str, optional): Reduction of the loss elements. Default: "mean"
     """
 
-    def __init__(self, log=True, distance="L1", reduction="mean"):
+    def __init__(
+        self,
+        log=True,
+        distance="L1",
+        reduction="mean",
+        frame_normalization: bool = False,
+    ):
         super(STFTMagnitudeLoss, self).__init__()
         self.log = log
+        self.reduction = reduction
+        self.frame_normalization = frame_normalization
+
+        if frame_normalization:
+            reduction = "none"
+
         if distance == "L1":
             self.distance = torch.nn.L1Loss(reduction=reduction)
         elif distance == "L2":
@@ -42,11 +54,22 @@ class STFTMagnitudeLoss(torch.nn.Module):
         else:
             raise ValueError(f"Invalid distance: '{distance}'.")
 
-    def forward(self, x_mag, y_mag):
+    def forward(self, x_mag: torch.Tensor, y_mag: torch.Tensor):
+        if self.frame_normalization:
+            frame_energy = y_mag.mean(dim=1, keepdim=True)
+
         if self.log:
             x_mag = torch.log(x_mag)
             y_mag = torch.log(y_mag)
-        return self.distance(x_mag, y_mag)
+
+        dist = self.distance(x_mag, y_mag)
+
+        if self.frame_normalization:
+            dist = dist * frame_energy
+            if self.reduction == "mean":
+                dist = dist.mean(dim=1)
+
+        return dist
 
 
 class STFTLoss(torch.nn.Module):
@@ -82,6 +105,7 @@ class STFTLoss(torch.nn.Module):
             'mean': the sum of the output will be divided by the number of elements in the output,
             'sum': the output will be summed.
             Default: 'mean'
+        frame_normalization (bool, optional): Normalize loss by energy of each frame. Default: False
         mag_distance (str, optional): Distance function ["L1", "L2"] for the magnitude loss terms.
         device (str, optional): Place the filterbanks on specified device. Default: None
 
@@ -110,6 +134,7 @@ class STFTLoss(torch.nn.Module):
         eps: float = 1e-8,
         output: str = "loss",
         reduction: str = "mean",
+        frame_normalization: bool = False,
         mag_distance: str = "L1",
         device: Any = None,
     ):
@@ -130,6 +155,7 @@ class STFTLoss(torch.nn.Module):
         self.eps = eps
         self.output = output
         self.reduction = reduction
+        self.frame_normalization = frame_normalization
         self.mag_distance = mag_distance
         self.device = device
 
@@ -138,11 +164,13 @@ class STFTLoss(torch.nn.Module):
             log=True,
             reduction=reduction,
             distance=mag_distance,
+            frame_normalization=frame_normalization,
         )
         self.linstft = STFTMagnitudeLoss(
             log=False,
             reduction=reduction,
             distance=mag_distance,
+            frame_normalization=frame_normalization,
         )
 
         # setup mel filterbank
@@ -348,6 +376,7 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
             Default: None
         n_bins (int, optional): Number of mel frequency bins. Required when scale = 'mel'. Default: None.
         scale_invariance (bool, optional): Perform an optimal scaling of the target. Default: False
+        frame_normalization (bool, optional): Normalize loss by energy of each frame. Default: False
     """
 
     def __init__(
@@ -365,6 +394,7 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
         n_bins: int = None,
         perceptual_weighting: bool = False,
         scale_invariance: bool = False,
+        frame_normalization: bool = False,
         **kwargs,
     ):
         super().__init__()
@@ -390,6 +420,7 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
                     n_bins,
                     perceptual_weighting,
                     scale_invariance,
+                    frame_normalization=frame_normalization,
                     **kwargs,
                 )
             ]

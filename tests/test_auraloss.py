@@ -22,6 +22,21 @@ def test_stft():
     assert res is not None
 
 
+def test_stft_frame_normalization():
+    target = torch.rand(8, 2, 44100)
+    pred = torch.rand(8, 2, 44100)
+    # test difference weights
+    loss = auraloss.freq.STFTLoss(
+        w_log_mag=1.0,
+        w_lin_mag=0.0,
+        w_sc=1.0,
+        reduction="mean",
+        frame_normalization=True,
+    )
+    res = loss(pred, target)
+    assert res is not None
+
+
 def test_stft_weights_a():
     target = torch.rand(8, 2, 44100)
     pred = torch.rand(8, 2, 44100)
