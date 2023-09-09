@@ -55,7 +55,7 @@ class FIRFilter(torch.nn.Module):
     a sampling rate of 44.1 kHz, considering adjusting this value at differnt sampling rates.
     """
 
-    def __init__(self, filter_type="hp", coef=0.85, fs=44100, ntaps=101, plot=False):
+    def __init__(self, filter_type="hp", coef=0.85, fs=44100, ntaps=101, butter_order=2, butter_freq=(250, 5000), butter_filter_type="bandpass", plot=False):
         """Initilize FIR pre-emphasis filtering module."""
         super(FIRFilter, self).__init__()
         self.filter_type = filter_type
@@ -63,6 +63,9 @@ class FIRFilter(torch.nn.Module):
         self.fs = fs
         self.ntaps = ntaps
         self.plot = plot
+        self.butter_order = butter_order
+        self.butter_freq = butter_freq
+        self.butter_filter_type = butter_filter_type
 
         import scipy.signal
 
@@ -113,6 +116,30 @@ class FIRFilter(torch.nn.Module):
             if plot:
                 from .plotting import compare_filters
                 compare_filters(b, a, taps, fs=fs)
+        elif filter_type == "butter":
+            # Define butter filter
+            filts = signal.lti(*signal.butter(self.butter_order, self.butter_freq, self.butter_filter_type, analog=True))
+
+            # convert analog filter to digital filter
+            b, a = scipy.signal.bilinear(filts.num, filts.den, fs=fs)
+
+            # compute the digital filter frequency response
+            w_iir, h_iir = scipy.signal.freqz(b, a, worN=512, fs=fs)
+
+            # then we fit to 101 tap FIR filter with least squares
+            taps = scipy.signal.firls(ntaps, w_iir, abs(h_iir), fs=fs)
+
+            # now implement this digital FIR filter as a Conv1d layer
+            self.fir = torch.nn.Conv1d(
+                1, 1, kernel_size=ntaps, bias=False, padding=ntaps // 2
+            )
+            self.fir.weight.requires_grad = False
+            self.fir.weight.data = torch.tensor(taps.astype("float32")).view(1, 1, -1)
+
+            if plot:
+                from .plotting import compare_filters
+                compare_filters(b, a, taps, fs=fs)
+
 
     def forward(self, input, target):
         """Calculate forward propagation.
