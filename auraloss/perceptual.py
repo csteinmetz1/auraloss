@@ -118,7 +118,7 @@ class FIRFilter(torch.nn.Module):
                 compare_filters(b, a, taps, fs=fs)
         elif filter_type == "butter":
             # Define butter filter
-            filts = signal.lti(*signal.butter(self.butter_order, self.butter_freq, self.butter_filter_type, analog=True))
+            filts = scipy.signal.lti(*signal.butter(self.butter_order, self.butter_freq, self.butter_filter_type, analog=True))
 
             # convert analog filter to digital filter
             b, a = scipy.signal.bilinear(filts.num, filts.den, fs=fs)
