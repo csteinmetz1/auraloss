@@ -90,6 +90,7 @@ class STFTLoss(torch.nn.Module):
             [‘lowpass’, ‘highpass’, ‘bandpass’, ‘bandstop’]
             Default: None
         filter_order (int, optional) The order of the filter for filter_weighting. Default: None
+        filter_ntaps (int, optional) Number of ntaps for FIRfilter
 
     Returns:
         loss:
@@ -121,7 +122,8 @@ class STFTLoss(torch.nn.Module):
         device: Any = None,
         filter_freq: Any = None,
         filter_type: str = None,
-        filter_order: int = None
+        filter_order: int = None,
+        filter_ntaps: int = 101
     ):
         super().__init__()
         self.fft_size = fft_size
@@ -146,6 +148,7 @@ class STFTLoss(torch.nn.Module):
         self.filter_freq = filter_freq
         self.filter_type = filter_type
         self.filter_order = filter_order
+        self.filter_ntaps = filter_ntaps
 
         self.spectralconv = SpectralConvergenceLoss()
         self.logstft = STFTMagnitudeLoss(
@@ -195,7 +198,7 @@ class STFTLoss(torch.nn.Module):
                 raise ValueError(
                     f"`sample_rate` must be supplied when `perceptual_weighting = True`."
                 )
-            self.prefilter = FIRFilter(filter_type="aw", fs=sample_rate)
+            self.prefilter = FIRFilter(filter_type="aw", fs=sample_rate, ntaps=self.filter_ntaps)
 
         if self.filter_weighting:
             if sample_rate is None:
@@ -206,7 +209,7 @@ class STFTLoss(torch.nn.Module):
                 raise ValueError(
                     f"`filter_order`, `filter_freq`, and `filter_type` must be supplied when `filter_weighting = True`."
                 )
-            self.prefilter = FIRFilter(filter_type="butter", fs=sample_rate, butter_order=self.filter_order, butter_freq=self.filter_freq, butter_filter_type=self.filter_type)
+            self.prefilter = FIRFilter(filter_type="butter", fs=sample_rate, butter_order=self.filter_order, butter_freq=self.filter_freq, butter_filter_type=self.filter_type, ntaps=self.filter_ntaps)
 
     def stft(self, x):
         """Perform STFT.
