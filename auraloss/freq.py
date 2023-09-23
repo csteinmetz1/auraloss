@@ -71,6 +71,7 @@ class STFTLoss(torch.nn.Module):
             Default: None
         n_bins (int, optional): Number of scaling frequency bins. Default: None.
         perceptual_weighting (bool, optional): Apply perceptual A-weighting (Sample rate must be supplied). Default: False
+        filter_weighting (bool, optional): Apply filter weighting (Sample rate must be supplied). Default: False
         scale_invariance (bool, optional): Perform an optimal scaling of the target. Default: False
         eps (float, optional): Small epsilon value for stablity. Default: 1e-8
         output (str, optional): Format of the loss returned.
@@ -84,6 +85,11 @@ class STFTLoss(torch.nn.Module):
             Default: 'mean'
         mag_distance (str, optional): Distance function ["L1", "L2"] for the magnitude loss terms.
         device (str, optional): Place the filterbanks on specified device. Default: None
+        filter_freq (int or tuple, optional): The frequency to filter at for filter_weighting, tuple if type == 'bandpass' or 'bandstop', int for 'lowpass' or 'highpass'. Default: None
+        filter_type (str, optional): The type of filter to use for filter_weighting, options include:
+            [‘lowpass’, ‘highpass’, ‘bandpass’, ‘bandstop’]
+            Default: None
+        filter_order (int, optional) The order of the filter for filter_weighting. Default: None
 
     Returns:
         loss:
@@ -106,12 +112,16 @@ class STFTLoss(torch.nn.Module):
         scale: str = None,
         n_bins: int = None,
         perceptual_weighting: bool = False,
+        filter_weighting: bool = False,
         scale_invariance: bool = False,
         eps: float = 1e-8,
         output: str = "loss",
         reduction: str = "mean",
         mag_distance: str = "L1",
         device: Any = None,
+        filter_freq: Any = None,
+        filter_type: str = None,
+        filter_order: int = None
     ):
         super().__init__()
         self.fft_size = fft_size
@@ -126,12 +136,16 @@ class STFTLoss(torch.nn.Module):
         self.scale = scale
         self.n_bins = n_bins
         self.perceptual_weighting = perceptual_weighting
+        self.filter_weighting = filter_weighting
         self.scale_invariance = scale_invariance
         self.eps = eps
         self.output = output
         self.reduction = reduction
         self.mag_distance = mag_distance
         self.device = device
+        self.filter_freq = filter_freq
+        self.filter_type = filter_type
+        self.filter_order = filter_order
 
         self.spectralconv = SpectralConvergenceLoss()
         self.logstft = STFTMagnitudeLoss(
@@ -183,6 +197,17 @@ class STFTLoss(torch.nn.Module):
                 )
             self.prefilter = FIRFilter(filter_type="aw", fs=sample_rate)
 
+        if self.filter_weighting:
+            if sample_rate is None:
+                raise ValueError(
+                    f"`sample_rate` must be supplied when `perceptual_weighting = True`."
+                )
+            if self.filter_order is None or self.filter_freq is None or self.filter_type is None:
+                raise ValueError(
+                    f"`filter_order`, `filter_freq`, and `filter_type` must be supplied when `filter_weighting = True`."
+                )
+            self.prefilter = FIRFilter(filter_type="butter", fs=sample_rate, butter_order=self.filter_order, butter_freq=self.filter_freq, butter_filter_type=self.filter_type)
+
     def stft(self, x):
         """Perform STFT.
         Args:
@@ -209,7 +234,7 @@ class STFTLoss(torch.nn.Module):
     def forward(self, input: torch.Tensor, target: torch.Tensor):
         bs, chs, seq_len = input.size()
 
-        if self.perceptual_weighting:  # apply optional A-weighting via FIR filter
+        if self.perceptual_weighting or self.filter_weighting:  # apply optional A-weighting or custom Butterworth filter via FIR filter
             # since FIRFilter only support mono audio we will move channels to batch dim
             input = input.view(bs * chs, 1, -1)
             target = target.view(bs * chs, 1, -1)
@@ -347,6 +372,8 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
             ['mel', 'chroma']
             Default: None
         n_bins (int, optional): Number of mel frequency bins. Required when scale = 'mel'. Default: None.
+        perceptual_weighting (bool, optional): Apply perceptual A-weighting (Sample rate must be supplied). Default: False
+        filter_weighting (bool, optional): Apply filter weighting (Sample rate must be supplied). Default: False
         scale_invariance (bool, optional): Perform an optimal scaling of the target. Default: False
     """
 
@@ -364,6 +391,7 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
         scale: str = None,
         n_bins: int = None,
         perceptual_weighting: bool = False,
+        filter_weighting: bool = False,
         scale_invariance: bool = False,
         **kwargs,
     ):
@@ -389,6 +417,7 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
                     scale,
                     n_bins,
                     perceptual_weighting,
+                    filter_weighting,
                     scale_invariance,
                     **kwargs,
                 )
