@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from typing import List, Any
 
-from .utils import apply_reduction
+from .utils import apply_reduction, FIRSequential
 from .perceptual import SumAndDifference, FIRFilter
 
 
@@ -84,6 +84,7 @@ class STFTLoss(torch.nn.Module):
             Default: 'mean'
         mag_distance (str, optional): Distance function ["L1", "L2"] for the magnitude loss terms.
         device (str, optional): Place the filterbanks on specified device. Default: None
+        prefilter (FIRFilter, optional): apply customizable FIRFilter constructed by auraloss.perceptual.FIRFilter to STFT loss. Default: None
 
     Returns:
         loss:
@@ -112,6 +113,7 @@ class STFTLoss(torch.nn.Module):
         reduction: str = "mean",
         mag_distance: str = "L1",
         device: Any = None,
+        prefilter: FIRFilter = None,
     ):
         super().__init__()
         self.fft_size = fft_size
@@ -132,6 +134,7 @@ class STFTLoss(torch.nn.Module):
         self.reduction = reduction
         self.mag_distance = mag_distance
         self.device = device
+        self.prefilter = prefilter
 
         self.spectralconv = SpectralConvergenceLoss()
         self.logstft = STFTMagnitudeLoss(
@@ -181,7 +184,10 @@ class STFTLoss(torch.nn.Module):
                 raise ValueError(
                     f"`sample_rate` must be supplied when `perceptual_weighting = True`."
                 )
-            self.prefilter = FIRFilter(filter_type="aw", fs=sample_rate)
+            if self.prefilter is None:
+                self.prefilter = FIRFilter(filter_type="aw", fs=sample_rate)
+            else:
+                self.prefilter = FIRSequential(FIRFilter(filter_type="aw", fs=sample_rate), self.prefilter)
 
     def stft(self, x):
         """Perform STFT.
@@ -209,7 +215,7 @@ class STFTLoss(torch.nn.Module):
     def forward(self, input: torch.Tensor, target: torch.Tensor):
         bs, chs, seq_len = input.size()
 
-        if self.perceptual_weighting:  # apply optional A-weighting via FIR filter
+        if self.prefilter is not None:  # apply prefilter
             # since FIRFilter only support mono audio we will move channels to batch dim
             input = input.view(bs * chs, 1, -1)
             target = target.view(bs * chs, 1, -1)
