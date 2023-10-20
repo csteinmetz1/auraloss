@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from typing import List, Any
 
-from .utils import apply_reduction
+from .utils import apply_reduction, FIRSequential
 from .perceptual import SumAndDifference, FIRFilter
 
 
@@ -187,7 +187,7 @@ class STFTLoss(torch.nn.Module):
             if self.prefilter is None:
                 self.prefilter = FIRFilter(filter_type="aw", fs=sample_rate)
             else:
-                self.prefilter = torch.nn.Sequential(FIRFilter(filter_type="aw", fs=sample_rate), self.prefilter)
+                self.prefilter = FIRSequential(FIRFilter(filter_type="aw", fs=sample_rate), self.prefilter)
 
     def stft(self, x):
         """Perform STFT.

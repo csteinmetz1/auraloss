@@ -8,3 +8,11 @@ def apply_reduction(losses, reduction="none"):
     elif reduction == "sum":
         losses = losses.sum()
     return losses
+
+class FIRSequential(torch.nn.Sequential):
+  def __init__(self):
+    super().__init__()
+  def forward(self, *inputs):
+    for module in self._modules.values:
+      inputs = module(*inputs)
+    return inputs
