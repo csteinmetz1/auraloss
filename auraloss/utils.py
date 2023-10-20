@@ -11,6 +11,6 @@ def apply_reduction(losses, reduction="none"):
 
 class FIRSequential(torch.nn.Sequential):
   def forward(self, *inputs):
-    for module in self._modules.values:
+    for module in self._modules.values():
       inputs = module(*inputs)
     return inputs
