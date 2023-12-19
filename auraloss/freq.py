@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from typing import List, Any
 
-from .utils import apply_reduction
+from .utils import apply_reduction, get_window
 from .perceptual import SumAndDifference, FIRFilter
 
 
@@ -58,8 +58,9 @@ class STFTLoss(torch.nn.Module):
         fft_size (int, optional): FFT size in samples. Default: 1024
         hop_size (int, optional): Hop size of the FFT in samples. Default: 256
         win_length (int, optional): Length of the FFT analysis window. Default: 1024
-        window (str, optional): Window to apply before FFT, options include:
-           ['hann_window', 'bartlett_window', 'blackman_window', 'hamming_window', 'kaiser_window']
+        window (str, optional): Window to apply before FFT, can either be one of the window function provided in PyTorch
+            ['hann_window', 'bartlett_window', 'blackman_window', 'hamming_window', 'kaiser_window']
+            or any of the windows provided by [SciPy](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.windows.get_window.html).
             Default: 'hann_window'
         w_sc (float, optional): Weight of the spectral convergence loss term. Default: 1.0
         w_log_mag (float, optional): Weight of the log magnitude loss term. Default: 1.0
@@ -117,7 +118,7 @@ class STFTLoss(torch.nn.Module):
         self.fft_size = fft_size
         self.hop_size = hop_size
         self.win_length = win_length
-        self.window = getattr(torch, window)(win_length)
+        self.window = get_window(window, win_length)
         self.w_sc = w_sc
         self.w_log_mag = w_log_mag
         self.w_lin_mag = w_lin_mag
