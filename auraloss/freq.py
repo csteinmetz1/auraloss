@@ -148,6 +148,8 @@ class STFTLoss(torch.nn.Module):
         self.mag_distance = mag_distance
         self.device = device
 
+        self.phs_used = bool(self.w_phs)
+
         self.spectralconv = SpectralConvergenceLoss()
         self.logstft = STFTMagnitudeLoss(
             log=True,
@@ -220,7 +222,13 @@ class STFTLoss(torch.nn.Module):
         x_mag = torch.sqrt(
             torch.clamp((x_stft.real**2) + (x_stft.imag**2), min=self.eps)
         )
-        x_phs = torch.angle(x_stft)
+
+        # torch.angle is expensive, so it is only evaluated if the values are used in the loss
+        if self.phs_used:
+            x_phs = torch.angle(x_stft)
+        else:
+            x_phs = None
+
         return x_mag, x_phs
 
     def forward(self, input: torch.Tensor, target: torch.Tensor):
@@ -241,6 +249,7 @@ class STFTLoss(torch.nn.Module):
 
         # compute the magnitude and phase spectra of input and target
         self.window = self.window.to(input.device)
+
         x_mag, x_phs = self.stft(input.view(-1, input.size(-1)))
         y_mag, y_phs = self.stft(target.view(-1, target.size(-1)))
 
@@ -259,7 +268,7 @@ class STFTLoss(torch.nn.Module):
         sc_mag_loss = self.spectralconv(x_mag, y_mag) if self.w_sc else 0.0
         log_mag_loss = self.logstft(x_mag, y_mag) if self.w_log_mag else 0.0
         lin_mag_loss = self.linstft(x_mag, y_mag) if self.w_lin_mag else 0.0
-        phs_loss = torch.nn.functional.mse_loss(x_phs, y_phs) if self.w_phs else 0.0
+        phs_loss = torch.nn.functional.mse_loss(x_phs, y_phs) if self.phs_used else 0.0
 
         # combine loss terms
         loss = (
