@@ -719,6 +719,7 @@ class ModifiedSumAndDifferenceSTFTLoss(torch.nn.Module):
         bs, chs, seq_len = input.size()
         self.awfilter.to(input.device)
         self.lpfilter.to(input.device)
+        self.window = self.window.to(input.device)
 
         #filter the input and target with A-weighting and lowpass filter
         input = input.view(bs * chs, 1, -1)
