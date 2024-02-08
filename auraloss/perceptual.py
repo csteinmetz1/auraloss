@@ -70,14 +70,14 @@ class FIRFilter(torch.nn.Module):
         if ntaps % 2 == 0:
             raise ValueError(f"ntaps must be odd (ntaps={ntaps}).")
 
-        if filter_type == "lp":
-            self.fir = torch.nn.Conv1d(1, 1, kernel_size=3, bias=False, padding=1)
-            self.fir.weight.requires_grad = False
-            self.fir.weight.data = torch.tensor([1, coef, 0]).view(1, 1, -1)
-        elif filter_type == "hp":
+        if filter_type == "hp":
             self.fir = torch.nn.Conv1d(1, 1, kernel_size=3, bias=False, padding=1)
             self.fir.weight.requires_grad = False
             self.fir.weight.data = torch.tensor([1, -coef, 0]).view(1, 1, -1)
+        elif filter_type == "lp":
+            self.fir = torch.nn.Conv1d(1, 1, kernel_size=3, bias=False, padding=1)
+            self.fir.weight.requires_grad = False
+            self.fir.weight.data = torch.tensor([1, coef, 0]).view(1, 1, -1)
         elif filter_type == "fd":
             self.fir = torch.nn.Conv1d(1, 1, kernel_size=3, bias=False, padding=1)
             self.fir.weight.requires_grad = False
