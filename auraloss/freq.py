@@ -373,6 +373,7 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
             ['mel', 'chroma']
             Default: None
         n_bins (int, optional): Number of mel frequency bins. Required when scale = 'mel'. Default: None.
+        perceptual_weighting (bool, optional): Apply perceptual A-weighting (Sample rate must be supplied). Default: False
         scale_invariance (bool, optional): Perform an optimal scaling of the target. Default: False
     """
 
@@ -449,13 +450,13 @@ class RandomResolutionSTFTLoss(torch.nn.Module):
     See [Steinmetz & Reiss, 2020](https://www.christiansteinmetz.com/s/DMRN15__auraloss__Audio_focused_loss_functions_in_PyTorch.pdf)
 
     Args:
-        resolutions (int): Total number of STFT resolutions.
-        min_fft_size (int): Smallest FFT size.
-        max_fft_size (int): Largest FFT size.
-        min_hop_size (int): Smallest hop size as porportion of window size.
-        min_hop_size (int): Largest hop size as porportion of window size.
+        resolutions (int): Total number of STFT resolutions. Default: 3
+        min_fft_size (int): Smallest FFT size. Default: 16
+        max_fft_size (int): Largest FFT size. Default: 32768
+        min_hop_size (int): Smallest hop size as porportion of window size. Default: 0.1
+        min_hop_size (int): Largest hop size as porportion of window size. Default: 1.0
         window (str): Window function type.
-        randomize_rate (int): Number of forwards before STFTs are randomized.
+        randomize_rate (int): Number of forwards before STFTs are randomized. Default: 1
     """
 
     def __init__(
