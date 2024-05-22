@@ -5,7 +5,6 @@ from typing import List, Any
 from .utils import apply_reduction, get_window
 from .perceptual import SumAndDifference, FIRFilter
 
-
 class SpectralConvergenceLoss(torch.nn.Module):
     """Spectral convergence loss module.
 
@@ -16,7 +15,7 @@ class SpectralConvergenceLoss(torch.nn.Module):
         super(SpectralConvergenceLoss, self).__init__()
 
     def forward(self, x_mag, y_mag):
-        return torch.norm(y_mag - x_mag, p="fro") / torch.norm(y_mag, p="fro")
+        return torch.norm(y_mag - x_mag, p="fro", dim=(-1, -2), keepdim=True) / torch.norm(y_mag, p="fro", dim=(-1, -2), keepdim=True)
 
 
 class STFTMagnitudeLoss(torch.nn.Module):
