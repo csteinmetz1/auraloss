@@ -1,6 +1,12 @@
 name: pytest
 
-on: [push]
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+  schedule:
+    - cron: '0 0 * * 0' # at 00:00 every Sunday
 
 jobs:
   build:
